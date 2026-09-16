@@ -1,4 +1,4 @@
-import { Package, Repeat, Users, Wallet } from "lucide-react";
+import { Package, Repeat, Users, Wallet, UserCog, BadgePercent, UserX } from "lucide-react";
 import { CustomChartsSection } from "@/features/stemtown/components/CustomChartsSection";
 import { Fragment, useMemo, useState } from "react";
 import {
@@ -35,7 +35,7 @@ import { FactTable, type Column } from "@/features/stemtown/components/fact-tabl
 import { DataTableView } from "@/features/stemtown/components/data-table-view";
 import { FilterBar } from "@/features/stemtown/components/filters";
 import { KpiCard } from "@/features/stemtown/components/kpi";
-import { InsightList, Panel } from "@/features/stemtown/components/panel";
+import { InsightList, Panel, SectionHeader, SubSectionHeader } from "@/features/stemtown/components/panel";
 import { DashboardShell } from "@/features/stemtown/components/shell";
 import {
   b2cBranchOptions,
@@ -71,6 +71,8 @@ const CROSS_LABELS = {
   phone: "Khách hàng",
   bucket: "Kỳ",
   freq: "Số lần mua",
+  staff: "Nhân viên phụ trách",
+  promo: "CTKM",
 };
 
 
@@ -100,6 +102,8 @@ export function B2CPage() {
       matchSel(r.source, sel["source"]) &&
       matchSel(r.productName, sel["product"]) &&
       matchSel(r.phone, selectedPhone) &&
+      matchSel(r.assignedStaff, sel["staff"]) &&
+      matchSel(r.promoCode, sel["promo"]) &&
       matchSel(bucketOf(r.date, filters.timeUnit), sel["bucket"]);
     const rowsBase = filterB2C(filters).filter(keep);
     // Cross-filter theo số lần mua (freq): nhóm mua của từng SĐT tính trên tập ĐÃ lọc (chưa lọc freq)
@@ -359,6 +363,117 @@ export function B2CPage() {
       })(),
     ].filter((x): x is string => Boolean(x));
 
+    /* ---------------------------------------------------------------- */
+    /* Giá trị khách hàng: DT/khách (chỉ đơn có SĐT)                     */
+    /* ---------------------------------------------------------------- */
+    const revenueWithPhone = withPhone.reduce((s, r) => s + r.revenue, 0);
+    const revenuePerCustomer = customers > 0 ? revenueWithPhone / customers : null;
+
+    /* ---------------------------------------------------------------- */
+    /* Đơn chưa có thông tin KH (không có SĐT)                           */
+    /* ---------------------------------------------------------------- */
+    const noPhoneRows = rows.filter((r) => !r.phone);
+    const noPhoneOrders = new Set(noPhoneRows.map((r) => r.orderCode)).size;
+    const noPhoneRevenue = noPhoneRows.reduce((s, r) => s + r.revenue, 0);
+    const noPhoneOrderShare = orders > 0 ? (noPhoneOrders / orders) * 100 : null;
+
+    const noPhoneStaffRank = toSortedPairs(
+      groupSum(noPhoneRows, (r) => r.assignedStaff ?? "Chưa gán NV", (r) => r.revenue),
+    );
+    const topNoPhoneStaff = noPhoneStaffRank.slice(0, 5).map((s) => s.name);
+    const noPhoneStaffOf = (name: string) => (topNoPhoneStaff.includes(name) ? name : "Nhân viên khác");
+    const noPhoneStaffNames = Array.from(new Set([...topNoPhoneStaff, "Nhân viên khác"]));
+    const noPhoneTimeline = buckets.map((b) => {
+      const bRows = noPhoneRows.filter((r) => bucketOf(r.date, filters.timeUnit) === b);
+      const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
+      for (const s of noPhoneStaffNames) {
+        const sRows = bRows.filter((r) => noPhoneStaffOf(r.assignedStaff ?? "Chưa gán NV") === s);
+        entry[`rev__${s}`] = sRows.reduce((sum, r) => sum + r.revenue, 0);
+        entry[`cnt__${s}`] = new Set(sRows.map((r) => r.orderCode)).size;
+      }
+      entry.revenueTotal = bRows.reduce((s, r) => s + r.revenue, 0);
+      entry.orderTotal = new Set(bRows.map((r) => r.orderCode)).size;
+      return entry;
+    });
+
+    /* ---------------------------------------------------------------- */
+    /* Nhân viên phụ trách: doanh thu × danh mục, top 5 + "Nhân viên khác" */
+    /* ---------------------------------------------------------------- */
+    const staffRows = rows.filter((r) => r.assignedStaff);
+    const staffRevRank = toSortedPairs(groupSum(staffRows, (r) => r.assignedStaff as string, (r) => r.revenue));
+    const top5Staff = staffRevRank.slice(0, 5).map((s) => s.name);
+    const staffGroupOf = (name: string) => (top5Staff.includes(name) ? name : "Nhân viên khác");
+    const staffOrderNames = staffRevRank.length > 5 ? [...top5Staff, "Nhân viên khác"] : top5Staff;
+    const staffChart = staffOrderNames
+      .map((name) => {
+        const sRows = staffRows.filter((r) => staffGroupOf(r.assignedStaff as string) === name);
+        const entry: Record<string, number | string | null> = { name };
+        let total = 0;
+        for (const c of categories) {
+          const v = sRows.filter((r) => r.category === c).reduce((s, r) => s + r.revenue, 0);
+          entry[c] = v;
+          total += v;
+        }
+        entry.total = total;
+        entry.customerCount = new Set(sRows.filter((r) => r.phone).map((r) => r.phone)).size;
+        entry.productCount = sRows.reduce((s, r) => s + r.quantity, 0);
+        // Target doanh thu theo NHÂN VIÊN theo tháng: chưa có nguồn dữ liệu (sheet KPI hiện chỉ có
+        // target theo B2C/B2B toàn công ty) -> để null, KHÔNG suy diễn (đường target sẽ không vẽ).
+        entry.target = null;
+        return entry;
+      })
+      .filter((e) => (e.total as number) > 0);
+
+    /* ---------------------------------------------------------------- */
+    /* Khuyến mãi (CTKM) — theo cột "MaKhuyenMai" + "Số tiền KM"          */
+    /* ---------------------------------------------------------------- */
+    const promoRows = rows.filter((r) => r.promoCode);
+    const promoRunning = new Set(promoRows.map((r) => r.promoCode)).size;
+    const promoApplied = promoRows.length; // 1 dòng = 1 đơn (đã gộp theo Mã đơn hàng)
+    const promoCost = promoRows.reduce((s, r) => s + r.discount, 0);
+    const promoRevenue = promoRows.reduce((s, r) => s + r.revenue, 0);
+
+    type PromoAgg = { orders: Set<string>; cost: number; revenue: number; newCustomers: number; from: string; to: string };
+    const promoAgg = new Map<string, PromoAgg>();
+    for (const r of promoRows) {
+      const key = r.promoCode as string;
+      const cur =
+        promoAgg.get(key) ?? { orders: new Set<string>(), cost: 0, revenue: 0, newCustomers: 0, from: r.date, to: r.date };
+      cur.orders.add(r.orderCode);
+      cur.cost += r.discount;
+      cur.revenue += r.revenue;
+      if (r.phone && firstOrderByPhone.get(r.phone) === r.orderCode) cur.newCustomers += 1;
+      if (r.date && r.date < cur.from) cur.from = r.date;
+      if (r.date && r.date > cur.to) cur.to = r.date;
+      promoAgg.set(key, cur);
+    }
+    const promoList = Array.from(promoAgg.entries())
+      .map(([name, v]) => ({
+        name,
+        value: v.revenue,
+        orders: v.orders.size,
+        cost: v.cost,
+        newCustomers: v.newCustomers,
+        from: v.from,
+        to: v.to,
+        share: promoRevenue ? (v.revenue / promoRevenue) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+    const top10Promo = promoList.slice(0, 10);
+
+    const promoTimeline = buckets.map((b) => {
+      const bRows = promoRows.filter((r) => bucketOf(r.date, filters.timeUnit) === b);
+      const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
+      let total = 0;
+      for (const c of categories) {
+        const v = bRows.filter((r) => r.category === c).reduce((s, r) => s + r.revenue, 0);
+        entry[c] = v;
+        total += v;
+      }
+      entry.total = total;
+      return entry;
+    });
+
     return {
       rows,
       revenue,
@@ -388,6 +503,20 @@ export function B2CPage() {
       monthWeekMax,
       detail,
       insights,
+      revenuePerCustomer,
+      noPhoneOrders,
+      noPhoneRevenue,
+      noPhoneOrderShare,
+      noPhoneStaffNames,
+      noPhoneTimeline,
+      staffChart,
+      promoRunning,
+      promoApplied,
+      promoCost,
+      promoRevenue,
+      top10Promo,
+      promoList,
+      promoTimeline,
     };
   }, [filters, sel, compare]);
 
@@ -405,7 +534,29 @@ export function B2CPage() {
     { key: "qty", header: "Số lượng", render: (r) => formatNumber(r.quantity), align: "right" },
     { key: "revenue", header: "Tổng doanh thu (đ)", render: (r) => formatNumber(r.revenue), align: "right" },
     { key: "staff", header: "Nhân viên tạo đơn", render: (r) => r.staffName ?? "—" },
+    { key: "assignedStaff", header: "Nhân viên phụ trách", render: (r) => r.assignedStaff ?? "—" },
+    { key: "promo", header: "CTKM", render: (r) => r.promoCode ?? "—" },
     { key: "branch", header: "Tên chi nhánh", render: (r) => r.branch },
+  ];
+
+  type PromoListItem = {
+    name: string;
+    value: number;
+    orders: number;
+    cost: number;
+    newCustomers: number;
+    from: string;
+    to: string;
+    share: number;
+  };
+  const promoColumns: Column<PromoListItem>[] = [
+    { key: "name", header: "Tên chương trình (MaKhuyenMai)", render: (r) => r.name },
+    { key: "period", header: "Thời gian", render: (r) => (r.from === r.to ? toDMY(r.from) : `${toDMY(r.from)} – ${toDMY(r.to)}`) },
+    { key: "orders", header: "Số lượt sử dụng", render: (r) => formatNumber(r.orders), align: "right" },
+    { key: "newCustomers", header: "Khách hàng mới", render: (r) => formatNumber(r.newCustomers), align: "right" },
+    { key: "cost", header: "Chi phí (đ)", render: (r) => formatNumber(r.cost), align: "right" },
+    { key: "revenue", header: "Doanh thu mang về (đ)", render: (r) => formatNumber(r.value), align: "right" },
+    { key: "share", header: "% doanh thu CTKM", render: (r) => formatPercent(r.share), align: "right" },
   ];
 
   const selectedCustomer = data.topCustomers.find((c) => c.phone === selectedPhone);
@@ -473,6 +624,12 @@ export function B2CPage() {
           icon={<Repeat className="size-4" />}
         />
       </div>
+
+      <Panel title="🚩 Chỉ số nổi bật" isEmpty={data.insights.length === 0}>
+        <InsightList items={data.insights} />
+      </Panel>
+
+      <SectionHeader title="Doanh thu & sản phẩm" subtitle="Xu hướng doanh thu, sản lượng và cơ cấu theo nguồn/danh mục" />
 
       <div className="grid gap-4 xl:grid-cols-2">
         {[
@@ -693,6 +850,21 @@ export function B2CPage() {
             </table>
           </div>
         </Panel>
+        <Panel title="Giá trị đơn trung bình theo Danh mục sản phẩm" code="CH-B2C-09" isEmpty={data.aovByCategory.length === 0}>
+          <SimpleBar
+            rows={data.aovByCategory}
+            unit="đ"
+            selected={sel["category"]}
+            onSelect={(name) => toggle("category", name)}
+            color={categoryColor}
+          />
+        </Panel>
+      </div>
+
+      <SectionHeader title="Khách hàng" subtitle="Ai đang mua, giá trị mang lại và những đơn chưa xác định được khách" icon={<Users className="size-4" />} />
+      <SubSectionHeader title="Khách có thông tin" subtitle="Đơn có SĐT hợp lệ — nhận diện được khách hàng" />
+
+      <div className="grid gap-4 xl:grid-cols-2">
         <Panel
           title="Top 10 khách hàng chi tiêu nhiều nhất"
           subtitle="Lọc theo SĐT; bấm vào cột để xem đơn hàng chi tiết bên dưới"
@@ -738,9 +910,6 @@ export function B2CPage() {
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
         <Panel
           title="Số lượng khách hàng theo thời gian"
           subtitle="Kỳ đầu khách xuất hiện = mua một lần; kỳ sau họ mua lại = mua nhiều lần"
@@ -794,17 +963,9 @@ export function B2CPage() {
             </ComposedChart>
           </ResponsiveContainer>
         </Panel>
-        <Panel title="Giá trị đơn trung bình theo Danh mục sản phẩm" code="CH-B2C-09" isEmpty={data.aovByCategory.length === 0}>
-          <SimpleBar
-            rows={data.aovByCategory}
-            unit="đ"
-            selected={sel["category"]}
-            onSelect={(name) => toggle("category", name)}
-            color={categoryColor}
-          />
-        </Panel>
       </div>
 
+      <SubSectionHeader title="Khách mới / quay lại" />
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel
           title="Cơ cấu khách theo số lần mua"
@@ -922,9 +1083,310 @@ export function B2CPage() {
         </Panel>
       </div>
 
-      <Panel title="🚩 Chỉ số nổi bật" isEmpty={data.insights.length === 0}>
-        <InsightList items={data.insights} />
+      <SubSectionHeader title="Giá trị KH" subtitle="AOV theo đơn hàng và doanh thu bình quân trên mỗi khách có thông tin" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <KpiCard
+          label="Giá trị trung bình / đơn hàng (AOV)"
+          {...(data.aov === null ? { unavailable: true } : { numeric: data.aov, format: formatCurrency })}
+          change={null}
+          subtitle={`${formatNumber(data.orders)} đơn hàng`}
+          icon={<Wallet className="size-4" />}
+        />
+        <KpiCard
+          label="Doanh thu / Khách hàng"
+          {...(data.revenuePerCustomer === null
+            ? { unavailable: true }
+            : { numeric: data.revenuePerCustomer, format: formatCurrency })}
+          change={null}
+          subtitle={`${formatNumber(data.customers)} khách có SĐT`}
+          icon={<Users className="size-4" />}
+        />
+      </div>
+
+      <SubSectionHeader title="Đơn chưa có thông tin KH" subtitle="Đơn không có SĐT khách hàng — không nhận diện được người mua" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <KpiCard
+          label="Đơn không có SĐT"
+          numeric={data.noPhoneOrders}
+          format={(n) => formatNumber(Math.round(n))}
+          unit="đơn"
+          change={null}
+          subtitle={`/ ${formatNumber(data.orders)} đơn tổng`}
+          icon={<UserX className="size-4" />}
+        />
+        <KpiCard
+          label="Tỷ lệ đơn không SĐT"
+          {...(data.noPhoneOrderShare === null
+            ? { unavailable: true }
+            : { numeric: data.noPhoneOrderShare, format: (n: number) => formatPercent(n) })}
+          change={null}
+          subtitle={`Doanh thu: ${formatCurrency(data.noPhoneRevenue)}`}
+          icon={<UserX className="size-4" />}
+        />
+      </div>
+      <Panel
+        title="Doanh thu & số lượng đơn không SĐT theo thời gian"
+        subtitle="Cột đậm = doanh thu (trục trái) · cột nhạt = số lượng đơn (trục phải) — cùng màu = cùng nhân viên phụ trách"
+        code="CH-B2C-13"
+        isEmpty={data.noPhoneOrders === 0}
+      >
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={data.noPhoneTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+            <XAxis dataKey="name" {...axisProps} />
+            <YAxis yAxisId="left" {...axisProps} tickFormatter={shortLabel} width={60} />
+            <YAxis yAxisId="right" orientation="right" {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={44} />
+            <Tooltip
+              cursor={{ fill: "var(--secondary)" }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload as Record<string, number | string>;
+                const revTotal = Number(row["revenueTotal"] ?? 0);
+                const cntTotal = Number(row["orderTotal"] ?? 0);
+                return (
+                  <TooltipBox label={String(label)}>
+                    {data.noPhoneStaffNames.map((s, i) => (
+                      <TooltipRow
+                        key={s}
+                        color={DONUT_COLORS[i % DONUT_COLORS.length] as string}
+                        name={s}
+                        value={Number(row[`rev__${s}`] ?? 0)}
+                        share={revTotal ? (Number(row[`rev__${s}`] ?? 0) / revTotal) * 100 : undefined}
+                      />
+                    ))}
+                    <TooltipRow name="Tổng doanh thu" value={revTotal} share={data.noPhoneRevenue ? (revTotal / data.noPhoneRevenue) * 100 : undefined} />
+                    <TooltipRow name="Tổng số đơn" value={cntTotal} unit="đơn" share={data.noPhoneOrders ? (cntTotal / data.noPhoneOrders) * 100 : undefined} />
+                  </TooltipBox>
+                );
+              }}
+            />
+            {data.noPhoneStaffNames.map((s, i) => (
+              <Bar key={`rev-${s}`} yAxisId="left" dataKey={`rev__${s}`} stackId="rev" name={s} fill={DONUT_COLORS[i % DONUT_COLORS.length] as string} />
+            ))}
+            {data.noPhoneStaffNames.map((s, i) => (
+              <Bar
+                key={`cnt-${s}`}
+                yAxisId="right"
+                dataKey={`cnt__${s}`}
+                stackId="cnt"
+                name={s}
+                legendType="none"
+                fillOpacity={0.4}
+                fill={DONUT_COLORS[i % DONUT_COLORS.length] as string}
+              />
+            ))}
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
       </Panel>
+
+      <SectionHeader
+        title="Nhân viên"
+        subtitle="Doanh thu, danh mục phụ trách và số khách hàng theo nhân viên phụ trách (top 5 + nhân viên khác)"
+        icon={<UserCog className="size-4" />}
+      />
+      <Panel
+        title="Doanh thu theo Nhân viên phụ trách × Danh mục sản phẩm"
+        subtitle="Top 5 nhân viên theo doanh thu (cột 6 = tổng các nhân viên còn lại). Đường target: chưa có dữ liệu target theo nhân viên."
+        code="CH-B2C-14"
+        isEmpty={data.staffChart.length === 0}
+      >
+        <ResponsiveContainer width="100%" height={360}>
+          <ComposedChart data={data.staffChart} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+            <XAxis dataKey="name" {...axisProps} tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 14)}…` : v)} />
+            <YAxis {...axisProps} tickFormatter={shortLabel} width={60} />
+            <Tooltip
+              cursor={{ fill: "var(--secondary)" }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload as Record<string, number | string>;
+                const total = Number(row["total"] ?? 0);
+                return (
+                  <TooltipBox label={String(label)}>
+                    {data.categories.map((c) => (
+                      <TooltipRow
+                        key={c}
+                        color={categoryColor(c)}
+                        name={c}
+                        value={Number(row[c] ?? 0)}
+                        share={total ? (Number(row[c] ?? 0) / total) * 100 : undefined}
+                      />
+                    ))}
+                    <TooltipRow name="Tổng doanh thu" value={total} share={data.revenue ? (total / data.revenue) * 100 : undefined} />
+                    <TooltipRow name="Số khách phụ trách" value={Number(row["customerCount"] ?? 0)} unit="khách" />
+                    <TargetRow actual={total} target={row["target"] === null ? null : Number(row["target"])} />
+                  </TooltipBox>
+                );
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {data.categories.map((c) => (
+              <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)} />
+            ))}
+            <Line
+              type="monotone"
+              dataKey="target"
+              name="Target"
+              stroke={CHART_COLORS.accent}
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              dot={false}
+              connectNulls={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </Panel>
+
+      <SectionHeader
+        title="Khuyến mãi"
+        subtitle="Hiệu quả từng chương trình khuyến mãi (cột MaKhuyenMai): chi phí bỏ ra và doanh thu mang về"
+        icon={<BadgePercent className="size-4" />}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Số CTKM đang chạy"
+          numeric={data.promoRunning}
+          format={(n) => formatNumber(Math.round(n))}
+          unit="chương trình"
+          change={null}
+          icon={<BadgePercent className="size-4" />}
+        />
+        <KpiCard
+          label="Số lượt áp dụng"
+          numeric={data.promoApplied}
+          format={(n) => formatNumber(Math.round(n))}
+          unit="đơn"
+          change={null}
+          icon={<BadgePercent className="size-4" />}
+        />
+        <KpiCard
+          label="Chi phí khuyến mãi"
+          numeric={data.promoCost}
+          format={formatCurrency}
+          change={null}
+          subtitle={data.revenue ? `${formatPercent((data.promoCost / data.revenue) * 100)} doanh thu B2C` : undefined}
+          icon={<Wallet className="size-4" />}
+        />
+        <KpiCard
+          label="Doanh thu đưa về từ CTKM"
+          numeric={data.promoRevenue}
+          format={formatCurrency}
+          change={null}
+          subtitle={data.revenue ? `${formatPercent((data.promoRevenue / data.revenue) * 100)} doanh thu B2C` : undefined}
+          icon={<Wallet className="size-4" />}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel
+          title="Top 10 CTKM theo doanh thu"
+          subtitle="Bấm vào cột để lọc chéo toàn trang theo chương trình này"
+          code="CH-B2C-15"
+          isEmpty={data.top10Promo.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={data.top10Promo} layout="vertical" margin={{ top: 8, right: 60, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                {...axisProps}
+                width={140}
+                tickFormatter={(v: string) => (v.length > 20 ? `${v.slice(0, 20)}…` : v)}
+              />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as {
+                    name: string;
+                    value: number;
+                    orders: number;
+                    cost: number;
+                    newCustomers: number;
+                    share: number;
+                  };
+                  return (
+                    <TooltipBox label={row.name}>
+                      <TooltipRow name="Số lượt áp dụng" value={row.orders} unit="đơn" />
+                      <TooltipRow name="Số đơn" value={row.orders} unit="đơn" />
+                      <TooltipRow name="Số khách hàng mới" value={row.newCustomers} unit="khách" />
+                      <TooltipRow name="Chi phí" value={row.cost} />
+                      <TooltipRow name="Doanh thu" value={row.value} />
+                      <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
+                        {formatPercent(row.share)} tổng doanh thu CTKM
+                      </p>
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Bar
+                dataKey="value"
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => toggle("promo", d?.name)}
+              >
+                {data.top10Promo.map((d, i) => (
+                  <Cell key={d.name} fill={cellFill(d.name, sel["promo"], DONUT_COLORS[i % DONUT_COLORS.length] as string)} />
+                ))}
+                <LabelList dataKey="value" position="right" formatter={(v: number) => formatShort(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel
+          title="Doanh thu từ đơn có CTKM theo thời gian"
+          subtitle="Cột chồng theo Danh mục sản phẩm — chỉ tính đơn có áp dụng khuyến mãi"
+          code="CH-B2C-16"
+          isEmpty={data.promoTimeline.every((r) => Number(r["total"] ?? 0) === 0)}
+        >
+          <ResponsiveContainer width="100%" height={340}>
+            <ComposedChart data={data.promoTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="name" {...axisProps} />
+              <YAxis {...axisProps} tickFormatter={shortLabel} width={60} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as Record<string, number>;
+                  const total = Number(row["total"] ?? 0);
+                  return (
+                    <TooltipBox label={String(label)}>
+                      {data.categories.map((c) => (
+                        <TooltipRow
+                          key={c}
+                          color={categoryColor(c)}
+                          name={c}
+                          value={Number(row[c] ?? 0)}
+                          share={total ? (Number(row[c] ?? 0) / total) * 100 : undefined}
+                        />
+                      ))}
+                      <TooltipRow name="Tổng" value={total} />
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {data.categories.map((c) => (
+                <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)} />
+              ))}
+              <Line type="monotone" dataKey="total" name="Tổng" stroke={TOTAL_COLOR} strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      <FactTable
+        title="Bảng chi tiết CTKM"
+        subtitle="Từng chương trình khuyến mãi trong kỳ đang lọc"
+        columns={promoColumns}
+        rows={data.promoList}
+        fileName="b2c-ctkm-chi-tiet"
+      />
 
       <FactTable
         title="Bảng chi tiết sản phẩm bán ra"

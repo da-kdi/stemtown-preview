@@ -68,3 +68,35 @@ export function InsightList({ items }: { items: string[] }) {
     </ul>
   );
 }
+
+/** Tiêu đề khu vực lớn trong trang (vd "Doanh thu & sản phẩm", "Nhân viên") — chỉ để định hướng
+ *  thị giác khi cuộn trang, KHÔNG phải tab (vẫn 1 trang cuộn dài). */
+export function SectionHeader({
+  title,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="mt-4 flex items-center gap-2.5 border-b border-border pb-2 first:mt-0">
+      {icon && <span className="text-primary">{icon}</span>}
+      <div className="min-w-0">
+        <h2 className="text-base font-bold tracking-tight text-foreground">{title}</h2>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** Tiêu đề khu vực con (vd "Khách có thông tin" bên trong "Khách hàng"). */
+export function SubSectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="mt-1 flex items-baseline gap-2">
+      <h3 className="text-sm font-semibold text-secondary-foreground">{title}</h3>
+      {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
+    </div>
+  );
+}

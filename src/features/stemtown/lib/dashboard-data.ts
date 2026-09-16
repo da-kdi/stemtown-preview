@@ -48,6 +48,12 @@ export type B2CRow = {
   branch: string;
   staffName: string | null;
   staffPhone: string | null;
+  /** Nhân viên phụ trách (cột "Tên nhân viên phụ trách") — dùng cho phân tích theo NV,
+   *  KHÁC với staffName (nhân viên tạo đơn). "N/A" trong sheet -> null (chưa gán). */
+  assignedStaff: string | null;
+  /** Mã/tên chương trình khuyến mãi (cột "MaKhuyenMai"). Các giá trị coi là "không có KM"
+   *  ("Không có CTKM", "Không tùy chỉnh", rỗng, "0", "N/A") đã được chuẩn hoá về null. */
+  promoCode: string | null;
   quantity: number;
   discountRaw: number;
   discount: number;
@@ -95,6 +101,16 @@ const toStr = (v: unknown): string | null => {
   const s = String(v).trim();
   return s === "" || s === "nan" ? null : s;
 };
+const NO_ASSIGNED_STAFF = new Set(["n/a", "na", "không xác định"]);
+const toStaff = (v: unknown): string | null => {
+  const s = toStr(v);
+  return s && !NO_ASSIGNED_STAFF.has(s.toLowerCase()) ? s : null;
+};
+const NO_PROMO = new Set(["không có ctkm", "không tùy chỉnh", "0", "n/a"]);
+const toPromo = (v: unknown): string | null => {
+  const s = toStr(v);
+  return s && !NO_PROMO.has(s.toLowerCase()) ? s : null;
+};
 const toNum = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -128,6 +144,8 @@ export function mapB2C(raw: Record<string, unknown>[]): B2CRow[] {
       branchCode: toStr(r["ChiNhanh"]) ?? "—",
       staffName: toStr(r["Tên nhân viên tạo đơn"]),
       staffPhone,
+      assignedStaff: toStaff(r["Tên nhân viên phụ trách"]),
+      promoCode: toPromo(r["MaKhuyenMai"]),
       quantity: toNum(r["Số lượng sản phẩm"]),
       discountRaw: toNum(r["Giảm giá"]),
       discount: toNum(r["Số tiền KM"]) || toNum(r["Giảm giá"]),
