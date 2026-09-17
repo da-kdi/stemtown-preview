@@ -30,6 +30,8 @@ import {
   DonutLegend,
   categoryColor,
   TOTAL_COLOR,
+  XCategoryTick,
+  YCategoryTick,
 } from "@/features/stemtown/components/chart-kit";
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { DataTableView } from "@/features/stemtown/components/data-table-view";
@@ -377,24 +379,57 @@ export function B2CPage() {
     const noPhoneRevenue = noPhoneRows.reduce((s, r) => s + r.revenue, 0);
     const noPhoneOrderShare = orders > 0 ? (noPhoneOrders / orders) * 100 : null;
 
-    const noPhoneStaffRank = toSortedPairs(
-      groupSum(noPhoneRows, (r) => r.assignedStaff ?? "Chưa gán NV", (r) => r.revenue),
-    );
-    const topNoPhoneStaff = noPhoneStaffRank.slice(0, 5).map((s) => s.name);
-    const noPhoneStaffOf = (name: string) => (topNoPhoneStaff.includes(name) ? name : "Nhân viên khác");
-    const noPhoneStaffNames = Array.from(new Set([...topNoPhoneStaff, "Nhân viên khác"]));
-    const noPhoneTimeline = buckets.map((b) => {
-      const bRows = noPhoneRows.filter((r) => bucketOf(r.date, filters.timeUnit) === b);
-      const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
-      for (const s of noPhoneStaffNames) {
-        const sRows = bRows.filter((r) => noPhoneStaffOf(r.assignedStaff ?? "Chưa gán NV") === s);
-        entry[`rev__${s}`] = sRows.reduce((sum, r) => sum + r.revenue, 0);
-        entry[`cnt__${s}`] = new Set(sRows.map((r) => r.orderCode)).size;
+    /* Số lượng đơn không SĐT theo thời gian, chia theo Danh mục sản phẩm (tooltip kèm doanh thu). */
+    const noPhoneByCatBucket = new Map<
+      string,
+      { byCategory: Map<string, { orders: Set<string>; revenue: number }>; orders: Set<string>; revenue: number }
+    >();
+    for (const r of noPhoneRows) {
+      const b = bucketOf(r.date, filters.timeUnit);
+      let cell = noPhoneByCatBucket.get(b);
+      if (!cell) {
+        cell = { byCategory: new Map(), orders: new Set(), revenue: 0 };
+        noPhoneByCatBucket.set(b, cell);
       }
-      entry.revenueTotal = bRows.reduce((s, r) => s + r.revenue, 0);
-      entry.orderTotal = new Set(bRows.map((r) => r.orderCode)).size;
+      cell.orders.add(r.orderCode);
+      cell.revenue += r.revenue;
+      let catCell = cell.byCategory.get(r.category);
+      if (!catCell) {
+        catCell = { orders: new Set(), revenue: 0 };
+        cell.byCategory.set(r.category, catCell);
+      }
+      catCell.orders.add(r.orderCode);
+      catCell.revenue += r.revenue;
+    }
+    const noPhoneByCategoryTimeline = buckets.map((b) => {
+      const cell = noPhoneByCatBucket.get(b);
+      const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
+      for (const c of categories) {
+        entry[c] = cell?.byCategory.get(c)?.orders.size ?? 0;
+        entry[`rev__${c}`] = cell?.byCategory.get(c)?.revenue ?? 0;
+      }
+      entry.total = cell?.orders.size ?? 0;
+      entry.revenueTotal = cell?.revenue ?? 0;
       return entry;
     });
+
+    /* Số lượng đơn không SĐT theo Nhân viên (top 10 + "NV khác") — bar ngang, 1 lượt duyệt. */
+    const noPhoneByStaffAll = new Map<string, Set<string>>();
+    for (const r of noPhoneRows) {
+      const key = r.assignedStaff ?? "Chưa gán NV";
+      const set = noPhoneByStaffAll.get(key) ?? new Set<string>();
+      set.add(r.orderCode);
+      noPhoneByStaffAll.set(key, set);
+    }
+    const noPhoneStaffRankAll = Array.from(noPhoneByStaffAll.entries())
+      .map(([name, set]) => ({ name, value: set.size }))
+      .sort((a, b) => b.value - a.value);
+    const top10NoPhoneStaff = noPhoneStaffRankAll.slice(0, 10);
+    const restNoPhoneStaff = noPhoneStaffRankAll.slice(10).reduce((s, x) => s + x.value, 0);
+    const noPhoneByStaffChart = [
+      ...top10NoPhoneStaff,
+      ...(restNoPhoneStaff > 0 ? [{ name: "Nhân viên khác", value: restNoPhoneStaff }] : []),
+    ].map((x) => ({ ...x, share: noPhoneOrders ? (x.value / noPhoneOrders) * 100 : 0 }));
 
     /* ---------------------------------------------------------------- */
     /* Nhân viên phụ trách: doanh thu × danh mục, top 5 + "Nhân viên khác" */
@@ -404,19 +439,29 @@ export function B2CPage() {
     const top5Staff = staffRevRank.slice(0, 5).map((s) => s.name);
     const staffGroupOf = (name: string) => (top5Staff.includes(name) ? name : "Nhân viên khác");
     const staffOrderNames = staffRevRank.length > 5 ? [...top5Staff, "Nhân viên khác"] : top5Staff;
+    // 1 lượt duyệt qua staffRows: nhóm -> danh mục -> doanh thu (tránh lặp lồng theo từng nhân viên/danh mục).
+    type StaffCell = { byCategory: Map<string, number>; total: number; customers: Set<string>; products: number };
+    const staffAgg = new Map<string, StaffCell>();
+    for (const r of staffRows) {
+      const g = staffGroupOf(r.assignedStaff as string);
+      let cell = staffAgg.get(g);
+      if (!cell) {
+        cell = { byCategory: new Map(), total: 0, customers: new Set(), products: 0 };
+        staffAgg.set(g, cell);
+      }
+      cell.byCategory.set(r.category, (cell.byCategory.get(r.category) ?? 0) + r.revenue);
+      cell.total += r.revenue;
+      cell.products += r.quantity;
+      if (r.phone) cell.customers.add(r.phone);
+    }
     const staffChart = staffOrderNames
       .map((name) => {
-        const sRows = staffRows.filter((r) => staffGroupOf(r.assignedStaff as string) === name);
+        const cell = staffAgg.get(name);
         const entry: Record<string, number | string | null> = { name };
-        let total = 0;
-        for (const c of categories) {
-          const v = sRows.filter((r) => r.category === c).reduce((s, r) => s + r.revenue, 0);
-          entry[c] = v;
-          total += v;
-        }
-        entry.total = total;
-        entry.customerCount = new Set(sRows.filter((r) => r.phone).map((r) => r.phone)).size;
-        entry.productCount = sRows.reduce((s, r) => s + r.quantity, 0);
+        for (const c of categories) entry[c] = cell?.byCategory.get(c) ?? 0;
+        entry.total = cell?.total ?? 0;
+        entry.customerCount = cell?.customers.size ?? 0;
+        entry.productCount = cell?.products ?? 0;
         // Target doanh thu theo NHÂN VIÊN theo tháng: chưa có nguồn dữ liệu (sheet KPI hiện chỉ có
         // target theo B2C/B2B toàn công ty) -> để null, KHÔNG suy diễn (đường target sẽ không vẽ).
         entry.target = null;
@@ -461,18 +506,26 @@ export function B2CPage() {
       .sort((a, b) => b.value - a.value);
     const top10Promo = promoList.slice(0, 10);
 
-    const promoTimeline = buckets.map((b) => {
-      const bRows = promoRows.filter((r) => bucketOf(r.date, filters.timeUnit) === b);
-      const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
-      let total = 0;
-      for (const c of categories) {
-        const v = bRows.filter((r) => r.category === c).reduce((s, r) => s + r.revenue, 0);
-        entry[c] = v;
-        total += v;
+    const promoTimeline = (() => {
+      const byBucket = new Map<string, { byCategory: Map<string, number>; total: number }>();
+      for (const r of promoRows) {
+        const b = bucketOf(r.date, filters.timeUnit);
+        let cell = byBucket.get(b);
+        if (!cell) {
+          cell = { byCategory: new Map(), total: 0 };
+          byBucket.set(b, cell);
+        }
+        cell.byCategory.set(r.category, (cell.byCategory.get(r.category) ?? 0) + r.revenue);
+        cell.total += r.revenue;
       }
-      entry.total = total;
-      return entry;
-    });
+      return buckets.map((b) => {
+        const cell = byBucket.get(b);
+        const entry: Record<string, number | string> = { bucket: b, name: bucketLabel(b, filters.timeUnit) };
+        for (const c of categories) entry[c] = cell?.byCategory.get(c) ?? 0;
+        entry.total = cell?.total ?? 0;
+        return entry;
+      });
+    })();
 
     return {
       rows,
@@ -507,8 +560,8 @@ export function B2CPage() {
       noPhoneOrders,
       noPhoneRevenue,
       noPhoneOrderShare,
-      noPhoneStaffNames,
-      noPhoneTimeline,
+      noPhoneByCategoryTimeline,
+      noPhoneByStaffChart,
       staffChart,
       promoRunning,
       promoApplied,
@@ -697,8 +750,12 @@ export function B2CPage() {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {data.categories.map((c) => (
-                  <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)} />
+                {data.categories.map((c, i) => (
+                  <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)}>
+                    {i === data.categories.length - 1 && (
+                      <LabelList dataKey="total" position="top" formatter={(v: number) => shortLabel(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                    )}
+                  </Bar>
                 ))}
                 <Line
                   type="monotone"
@@ -958,7 +1015,9 @@ export function B2CPage() {
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="Mua một lần" stackId="a" fill={CHART_COLORS.dark} />
-              <Bar dataKey="Mua nhiều lần" stackId="a" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Mua nhiều lần" stackId="a" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="total" position="top" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
               <Line type="monotone" dataKey="total" name="Tổng khách" stroke={TOTAL_COLOR} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -1076,15 +1135,17 @@ export function B2CPage() {
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="Khách mới" stackId="a" fill={CHART_COLORS.dark} />
-              <Bar dataKey="Khách quay lại" stackId="a" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Khách quay lại" stackId="a" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="total" position="top" formatter={(v: number) => shortLabel(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
               <Line type="monotone" dataKey="total" name="Tổng" stroke={TOTAL_COLOR} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </Panel>
       </div>
 
-      <SubSectionHeader title="Giá trị KH" subtitle="AOV theo đơn hàng và doanh thu bình quân trên mỗi khách có thông tin" />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <SubSectionHeader title="Giá trị KH & Đơn chưa có thông tin KH" subtitle="AOV, doanh thu/khách có thông tin, và mức độ thiếu thông tin khách hàng trong kỳ" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Giá trị trung bình / đơn hàng (AOV)"
           {...(data.aov === null ? { unavailable: true } : { numeric: data.aov, format: formatCurrency })}
@@ -1101,10 +1162,6 @@ export function B2CPage() {
           subtitle={`${formatNumber(data.customers)} khách có SĐT`}
           icon={<Users className="size-4" />}
         />
-      </div>
-
-      <SubSectionHeader title="Đơn chưa có thông tin KH" subtitle="Đơn không có SĐT khách hàng — không nhận diện được người mua" />
-      <div className="grid gap-4 sm:grid-cols-2">
         <KpiCard
           label="Đơn không có SĐT"
           numeric={data.noPhoneOrders}
@@ -1124,61 +1181,86 @@ export function B2CPage() {
           icon={<UserX className="size-4" />}
         />
       </div>
-      <Panel
-        title="Doanh thu & số lượng đơn không SĐT theo thời gian"
-        subtitle="Cột đậm = doanh thu (trục trái) · cột nhạt = số lượng đơn (trục phải) — cùng màu = cùng nhân viên phụ trách"
-        code="CH-B2C-13"
-        isEmpty={data.noPhoneOrders === 0}
-      >
-        <ResponsiveContainer width="100%" height={320}>
-          <ComposedChart data={data.noPhoneTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-            <XAxis dataKey="name" {...axisProps} />
-            <YAxis yAxisId="left" {...axisProps} tickFormatter={shortLabel} width={60} />
-            <YAxis yAxisId="right" orientation="right" {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={44} />
-            <Tooltip
-              cursor={{ fill: "var(--secondary)" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0]?.payload as Record<string, number | string>;
-                const revTotal = Number(row["revenueTotal"] ?? 0);
-                const cntTotal = Number(row["orderTotal"] ?? 0);
-                return (
-                  <TooltipBox label={String(label)}>
-                    {data.noPhoneStaffNames.map((s, i) => (
-                      <TooltipRow
-                        key={s}
-                        color={DONUT_COLORS[i % DONUT_COLORS.length] as string}
-                        name={s}
-                        value={Number(row[`rev__${s}`] ?? 0)}
-                        share={revTotal ? (Number(row[`rev__${s}`] ?? 0) / revTotal) * 100 : undefined}
-                      />
-                    ))}
-                    <TooltipRow name="Tổng doanh thu" value={revTotal} share={data.noPhoneRevenue ? (revTotal / data.noPhoneRevenue) * 100 : undefined} />
-                    <TooltipRow name="Tổng số đơn" value={cntTotal} unit="đơn" share={data.noPhoneOrders ? (cntTotal / data.noPhoneOrders) * 100 : undefined} />
-                  </TooltipBox>
-                );
-              }}
-            />
-            {data.noPhoneStaffNames.map((s, i) => (
-              <Bar key={`rev-${s}`} yAxisId="left" dataKey={`rev__${s}`} stackId="rev" name={s} fill={DONUT_COLORS[i % DONUT_COLORS.length] as string} />
-            ))}
-            {data.noPhoneStaffNames.map((s, i) => (
-              <Bar
-                key={`cnt-${s}`}
-                yAxisId="right"
-                dataKey={`cnt__${s}`}
-                stackId="cnt"
-                name={s}
-                legendType="none"
-                fillOpacity={0.4}
-                fill={DONUT_COLORS[i % DONUT_COLORS.length] as string}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel
+          title="Số lượng đơn không SĐT theo thời gian"
+          subtitle="Cột chồng theo Danh mục sản phẩm — tooltip kèm doanh thu tương ứng"
+          code="CH-B2C-13"
+          isEmpty={data.noPhoneOrders === 0}
+        >
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={data.noPhoneByCategoryTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="name" {...axisProps} />
+              <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={44} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as Record<string, number | string>;
+                  const total = Number(row["total"] ?? 0);
+                  const revTotal = Number(row["revenueTotal"] ?? 0);
+                  return (
+                    <TooltipBox label={String(label)}>
+                      {data.categories.map((c) => (
+                        <TooltipRow
+                          key={c}
+                          color={categoryColor(c)}
+                          name={c}
+                          value={Number(row[c] ?? 0)}
+                          unit="đơn"
+                          share={total ? (Number(row[c] ?? 0) / total) * 100 : undefined}
+                        />
+                      ))}
+                      <TooltipRow name="Tổng số đơn" value={total} unit="đơn" />
+                      <TooltipRow name="Doanh thu tương ứng" value={revTotal} />
+                    </TooltipBox>
+                  );
+                }}
               />
-            ))}
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </Panel>
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {data.categories.map((c, i) => (
+                <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)}>
+                  {i === data.categories.length - 1 && (
+                    <LabelList dataKey="total" position="top" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                  )}
+                </Bar>
+              ))}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel
+          title="Số lượng đơn không SĐT theo Nhân viên"
+          subtitle="Top 10 nhân viên (còn lại gộp vào “Nhân viên khác”)"
+          code="CH-B2C-13B"
+          isEmpty={data.noPhoneByStaffChart.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={data.noPhoneByStaffChart} layout="vertical" margin={{ top: 8, right: 44, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} tickFormatter={(v: number) => formatNumber(v)} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={140} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as { name: string; value: number; share: number };
+                  return (
+                    <TooltipBox label={row.name}>
+                      <TooltipRow name="Số đơn không SĐT" value={row.value} unit="đơn" share={row.share} />
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} fill={CHART_COLORS.primary}>
+                <LabelList dataKey="value" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
 
       <SectionHeader
         title="Nhân viên"
@@ -1191,10 +1273,10 @@ export function B2CPage() {
         code="CH-B2C-14"
         isEmpty={data.staffChart.length === 0}
       >
-        <ResponsiveContainer width="100%" height={360}>
-          <ComposedChart data={data.staffChart} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={380}>
+          <ComposedChart data={data.staffChart} margin={{ top: 16, right: 8, left: 0, bottom: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-            <XAxis dataKey="name" {...axisProps} tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 14)}…` : v)} />
+            <XAxis dataKey="name" {...axisProps} height={38} tick={XCategoryTick} interval={0} />
             <YAxis {...axisProps} tickFormatter={shortLabel} width={60} />
             <Tooltip
               cursor={{ fill: "var(--secondary)" }}
@@ -1221,8 +1303,12 @@ export function B2CPage() {
               }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            {data.categories.map((c) => (
-              <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)} />
+            {data.categories.map((c, i) => (
+              <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)}>
+                {i === data.categories.length - 1 && (
+                  <LabelList dataKey="total" position="top" formatter={(v: number) => shortLabel(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                )}
+              </Bar>
             ))}
             <Line
               type="monotone"
@@ -1289,13 +1375,7 @@ export function B2CPage() {
             <BarChart data={data.top10Promo} layout="vertical" margin={{ top: 8, right: 60, left: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
               <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                {...axisProps}
-                width={140}
-                tickFormatter={(v: string) => (v.length > 20 ? `${v.slice(0, 20)}…` : v)}
-              />
+              <YAxis type="category" dataKey="name" {...axisProps} width={150} tick={YCategoryTick} />
               <Tooltip
                 cursor={{ fill: "var(--secondary)" }}
                 content={({ active, payload }) => {
@@ -1326,10 +1406,11 @@ export function B2CPage() {
                 dataKey="value"
                 radius={[0, 4, 4, 0]}
                 cursor="pointer"
+                fill={CHART_COLORS.primary}
                 onClick={(d: { name?: string }) => toggle("promo", d?.name)}
               >
-                {data.top10Promo.map((d, i) => (
-                  <Cell key={d.name} fill={cellFill(d.name, sel["promo"], DONUT_COLORS[i % DONUT_COLORS.length] as string)} />
+                {data.top10Promo.map((d) => (
+                  <Cell key={d.name} fill={cellFill(d.name, sel["promo"], CHART_COLORS.primary)} />
                 ))}
                 <LabelList dataKey="value" position="right" formatter={(v: number) => formatShort(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
               </Bar>
@@ -1371,8 +1452,12 @@ export function B2CPage() {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {data.categories.map((c) => (
-                <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)} />
+              {data.categories.map((c, i) => (
+                <Bar key={c} dataKey={c} stackId="a" fill={categoryColor(c)}>
+                  {i === data.categories.length - 1 && (
+                    <LabelList dataKey="total" position="top" formatter={(v: number) => shortLabel(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                  )}
+                </Bar>
               ))}
               <Line type="monotone" dataKey="total" name="Tổng" stroke={TOTAL_COLOR} strokeWidth={2} dot={false} />
             </ComposedChart>

@@ -138,6 +138,59 @@ export function TargetRow({
 export const shortLabel = (v: number) => formatShort(v);
 
 /** Nhãn % vẽ bên trong lát donut để không bị cắt ở mép chart. */
+/** Tick trục danh mục (tên nhân viên, tên CTKM...) — viết đầy đủ, tự xuống dòng tối đa 2 dòng
+ *  thay vì cắt "…" giữa chừng, để không che mất tên. */
+export function wrapTickLines(text: string, maxCharsPerLine = 16, maxLines = 2): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (test.length > maxCharsPerLine && cur) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = test;
+    }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) {
+    const shown = lines.slice(0, maxLines);
+    shown[maxLines - 1] = `${shown[maxLines - 1]}…`;
+    return shown;
+  }
+  return lines;
+}
+
+/** Tick component cho trục X danh mục (nằm ngang dưới chart) — text căn giữa, tối đa 2 dòng. */
+export function XCategoryTick({ x, y, payload }: { x: number; y: number; payload: { value: string } }) {
+  const lines = wrapTickLines(String(payload.value ?? ""), 14, 2);
+  return (
+    <text x={x} y={y + 4} textAnchor="middle" fontSize={10} fill={CHART_COLORS.axis}>
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? 10 : 12}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
+/** Tick component cho trục Y danh mục (bar ngang) — text căn phải, tối đa 2 dòng. */
+export function YCategoryTick({ x, y, payload }: { x: number; y: number; payload: { value: string } }) {
+  const lines = wrapTickLines(String(payload.value ?? ""), 22, 2);
+  const startDy = lines.length > 1 ? -5 : 4;
+  return (
+    <text x={x} y={y} textAnchor="end" fontSize={10} fill={CHART_COLORS.axis}>
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? startDy : 12}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
 export function renderInsideLabel(props: {
   cx?: number;
   cy?: number;
