@@ -478,16 +478,28 @@ export function B2CPage() {
     const promoCost = promoRows.reduce((s, r) => s + r.discount, 0);
     const promoRevenue = promoRows.reduce((s, r) => s + r.revenue, 0);
 
-    type PromoAgg = { orders: Set<string>; cost: number; revenue: number; newCustomers: number; from: string; to: string };
+    type PromoAgg = {
+      orders: Set<string>;
+      cost: number;
+      revenue: number;
+      newCustomers: number;
+      returningCustomers: number;
+      unknownCustomers: number;
+      from: string;
+      to: string;
+    };
     const promoAgg = new Map<string, PromoAgg>();
     for (const r of promoRows) {
       const key = r.promoCode as string;
       const cur =
-        promoAgg.get(key) ?? { orders: new Set<string>(), cost: 0, revenue: 0, newCustomers: 0, from: r.date, to: r.date };
+        promoAgg.get(key) ??
+        { orders: new Set<string>(), cost: 0, revenue: 0, newCustomers: 0, returningCustomers: 0, unknownCustomers: 0, from: r.date, to: r.date };
       cur.orders.add(r.orderCode);
       cur.cost += r.discount;
       cur.revenue += r.revenue;
-      if (r.phone && firstOrderByPhone.get(r.phone) === r.orderCode) cur.newCustomers += 1;
+      if (!r.phone) cur.unknownCustomers += 1;
+      else if (firstOrderByPhone.get(r.phone) === r.orderCode) cur.newCustomers += 1;
+      else cur.returningCustomers += 1;
       if (r.date && r.date < cur.from) cur.from = r.date;
       if (r.date && r.date > cur.to) cur.to = r.date;
       promoAgg.set(key, cur);
@@ -499,12 +511,15 @@ export function B2CPage() {
         orders: v.orders.size,
         cost: v.cost,
         newCustomers: v.newCustomers,
+        returningCustomers: v.returningCustomers,
+        unknownCustomers: v.unknownCustomers,
         from: v.from,
         to: v.to,
         share: promoRevenue ? (v.revenue / promoRevenue) * 100 : 0,
       }))
       .sort((a, b) => b.value - a.value);
     const top10Promo = promoList.slice(0, 10);
+    const top10PromoByUsage = [...promoList].sort((a, b) => b.orders - a.orders).slice(0, 10);
 
     const promoTimeline = (() => {
       const byBucket = new Map<string, { byCategory: Map<string, number>; total: number }>();
@@ -568,6 +583,7 @@ export function B2CPage() {
       promoCost,
       promoRevenue,
       top10Promo,
+      top10PromoByUsage,
       promoList,
       promoTimeline,
     };
@@ -1172,7 +1188,7 @@ export function B2CPage() {
           icon={<UserX className="size-4" />}
         />
         <KpiCard
-          label="Tỷ lệ đơn không SĐT"
+          label="Tỷ lệ đơn không có SĐT"
           {...(data.noPhoneOrderShare === null
             ? { unavailable: true }
             : { numeric: data.noPhoneOrderShare, format: (n: number) => formatPercent(n) })}
@@ -1184,13 +1200,20 @@ export function B2CPage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel
-          title="Số lượng đơn không SĐT theo thời gian"
+          title="Số lượng đơn không có SĐT theo thời gian"
           subtitle="Cột chồng theo Danh mục sản phẩm — tooltip kèm doanh thu tương ứng"
           code="CH-B2C-13"
           isEmpty={data.noPhoneOrders === 0}
         >
           <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={data.noPhoneByCategoryTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+            <ComposedChart
+              data={data.noPhoneByCategoryTimeline}
+              margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
+              onClick={(e: { activePayload?: { payload?: { bucket?: string } }[] }) =>
+                toggle("bucket", e?.activePayload?.[0]?.payload?.bucket)
+              }
+              style={{ cursor: "pointer" }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
               <XAxis dataKey="name" {...axisProps} />
               <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={44} />
@@ -1232,7 +1255,7 @@ export function B2CPage() {
         </Panel>
 
         <Panel
-          title="Số lượng đơn không SĐT theo Nhân viên"
+          title="Số lượng đơn không có SĐT theo Nhân viên"
           subtitle="Top 10 nhân viên (còn lại gộp vào “Nhân viên khác”)"
           code="CH-B2C-13B"
           isEmpty={data.noPhoneByStaffChart.length === 0}
@@ -1249,12 +1272,20 @@ export function B2CPage() {
                   const row = payload[0]?.payload as { name: string; value: number; share: number };
                   return (
                     <TooltipBox label={row.name}>
-                      <TooltipRow name="Số đơn không SĐT" value={row.value} unit="đơn" share={row.share} />
+                      <TooltipRow name="Số đơn không có SĐT" value={row.value} unit="đơn" share={row.share} />
                     </TooltipBox>
                   );
                 }}
               />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} fill={CHART_COLORS.primary}>
+              <Bar
+                dataKey="value"
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => d?.name !== "Nhân viên khác" && toggle("staff", d?.name)}
+              >
+                {data.noPhoneByStaffChart.map((d) => (
+                  <Cell key={d.name} fill={cellFill(d.name, sel["staff"], CHART_COLORS.primary)} />
+                ))}
                 <LabelList dataKey="value" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
               </Bar>
             </BarChart>
@@ -1274,7 +1305,15 @@ export function B2CPage() {
         isEmpty={data.staffChart.length === 0}
       >
         <ResponsiveContainer width="100%" height={380}>
-          <ComposedChart data={data.staffChart} margin={{ top: 16, right: 8, left: 0, bottom: 16 }}>
+          <ComposedChart
+            data={data.staffChart}
+            margin={{ top: 16, right: 8, left: 0, bottom: 16 }}
+            onClick={(e: { activePayload?: { payload?: { name?: string } }[] }) => {
+              const name = e?.activePayload?.[0]?.payload?.name;
+              if (name && name !== "Nhân viên khác") toggle("staff", name);
+            }}
+            style={{ cursor: "pointer" }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
             <XAxis dataKey="name" {...axisProps} height={38} tick={XCategoryTick} interval={0} />
             <YAxis {...axisProps} tickFormatter={shortLabel} width={60} />
@@ -1331,7 +1370,7 @@ export function B2CPage() {
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Số CTKM đang chạy"
+          label="Số CTKM / Mã KM"
           numeric={data.promoRunning}
           format={(n) => formatNumber(Math.round(n))}
           unit="chương trình"
@@ -1419,13 +1458,87 @@ export function B2CPage() {
         </Panel>
 
         <Panel
+          title="Top 10 CTKM theo Số lượt sử dụng"
+          subtitle="Chia theo Khách mới / Khách quay lại / Không xác định — bấm vào cột để lọc chéo theo chương trình"
+          code="CH-B2C-15B"
+          isEmpty={data.top10PromoByUsage.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={data.top10PromoByUsage} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} tickFormatter={(v: number) => formatNumber(v)} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={150} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as {
+                    name: string;
+                    orders: number;
+                    newCustomers: number;
+                    returningCustomers: number;
+                    unknownCustomers: number;
+                  };
+                  const total = row.orders;
+                  return (
+                    <TooltipBox label={row.name}>
+                      <TooltipRow color={CHART_COLORS.dark} name="Khách mới" value={row.newCustomers} unit="đơn" share={total ? (row.newCustomers / total) * 100 : undefined} />
+                      <TooltipRow color={CHART_COLORS.primary} name="Khách quay lại" value={row.returningCustomers} unit="đơn" share={total ? (row.returningCustomers / total) * 100 : undefined} />
+                      <TooltipRow color={CHART_COLORS.axis} name="Không xác định" value={row.unknownCustomers} unit="đơn" share={total ? (row.unknownCustomers / total) * 100 : undefined} />
+                      <TooltipRow name="Tổng lượt sử dụng" value={total} unit="đơn" />
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar
+                dataKey="newCustomers"
+                name="Khách mới"
+                stackId="a"
+                fill={CHART_COLORS.dark}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => toggle("promo", d?.name)}
+              />
+              <Bar
+                dataKey="returningCustomers"
+                name="Khách quay lại"
+                stackId="a"
+                fill={CHART_COLORS.primary}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => toggle("promo", d?.name)}
+              />
+              <Bar
+                dataKey="unknownCustomers"
+                name="Không xác định"
+                stackId="a"
+                fill={CHART_COLORS.axis}
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => toggle("promo", d?.name)}
+              >
+                <LabelList dataKey="orders" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      <div className="grid gap-4">
+        <Panel
           title="Doanh thu từ đơn có CTKM theo thời gian"
           subtitle="Cột chồng theo Danh mục sản phẩm — chỉ tính đơn có áp dụng khuyến mãi"
           code="CH-B2C-16"
           isEmpty={data.promoTimeline.every((r) => Number(r["total"] ?? 0) === 0)}
         >
           <ResponsiveContainer width="100%" height={340}>
-            <ComposedChart data={data.promoTimeline} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+            <ComposedChart
+              data={data.promoTimeline}
+              margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
+              onClick={(e: { activePayload?: { payload?: { bucket?: string } }[] }) =>
+                toggle("bucket", e?.activePayload?.[0]?.payload?.bucket)
+              }
+              style={{ cursor: "pointer" }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
               <XAxis dataKey="name" {...axisProps} />
               <YAxis {...axisProps} tickFormatter={shortLabel} width={60} />
