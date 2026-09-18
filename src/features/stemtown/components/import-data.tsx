@@ -7,22 +7,41 @@ import {
   downloadB2BTemplate,
   parseB2BFile,
   saveImportedB2B,
+  type ImportResult,
 } from "@/features/stemtown/lib/b2b-import";
 
 type Props = {
   /** Gọi lại sau khi import/reset thành công để dashboard tính lại dữ liệu */
   onImported: (rows: Record<string, unknown>[] | null) => void;
   imported: boolean;
+  /** Cho phép tái dùng component này cho nguồn dữ liệu khác (mặc định: B2B biên bản nghiệm thu). */
+  title?: string;
+  description?: string;
+  parseFile?: (file: File) => Promise<ImportResult>;
+  saveRows?: (rows: Record<string, unknown>[]) => void;
+  clearRows?: () => void;
+  downloadTemplate?: () => void;
+  templateLabel?: string;
 };
 
-export function ImportDataBar({ onImported, imported }: Props) {
+export function ImportDataBar({
+  onImported,
+  imported,
+  title = "Cập nhật dữ liệu B2B",
+  description = "Tải template, điền dữ liệu theo đúng cột rồi import file CSV/JSON.",
+  parseFile = parseB2BFile,
+  saveRows = saveImportedB2B,
+  clearRows = clearImportedB2B,
+  downloadTemplate = downloadB2BTemplate,
+  templateLabel = "Template Data",
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   async function handleFile(file: File) {
     try {
-      const { rows, missing } = await parseB2BFile(file);
-      saveImportedB2B(rows);
+      const { rows, missing } = await parseFile(file);
+      saveRows(rows);
       onImported(rows);
       setStatus({
         kind: "ok",
@@ -38,10 +57,8 @@ export function ImportDataBar({ onImported, imported }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3">
       <div className="mr-auto">
-        <p className="text-sm font-semibold">Cập nhật dữ liệu B2B</p>
-        <p className="text-xs text-muted-foreground">
-          Tải template, điền dữ liệu theo đúng cột rồi import file CSV/JSON.
-        </p>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
 
       <input
@@ -56,8 +73,8 @@ export function ImportDataBar({ onImported, imported }: Props) {
         }}
       />
 
-      <Button variant="outline" size="sm" onClick={() => downloadB2BTemplate()}>
-        <Download className="size-4" /> Template Data
+      <Button variant="outline" size="sm" onClick={() => downloadTemplate()}>
+        <Download className="size-4" /> {templateLabel}
       </Button>
       <Button size="sm" onClick={() => inputRef.current?.click()}>
         <Upload className="size-4" /> Import Data
@@ -67,7 +84,7 @@ export function ImportDataBar({ onImported, imported }: Props) {
           variant="ghost"
           size="sm"
           onClick={() => {
-            clearImportedB2B();
+            clearRows();
             onImported(null);
             setStatus({ kind: "ok", text: "Đã khôi phục dữ liệu mẫu ban đầu." });
           }}
@@ -86,3 +103,4 @@ export function ImportDataBar({ onImported, imported }: Props) {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, Building2, FileCheck2, GraduationCap, Tag, Users, Wallet } from "lucide-react";
+import { AlertTriangle, Banknote, Building2, FileCheck2, GraduationCap, Tag, Users, Wallet, BarChart3, Table2, CalendarClock } from "lucide-react";
 import { CustomChartsSection } from "@/features/stemtown/components/CustomChartsSection";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -27,15 +27,25 @@ import {
   renderInsideLabel,
   shortLabel,
   DonutLegend,
+  XCategoryTick,
+  YCategoryTick,
 } from "@/features/stemtown/components/chart-kit";
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { DataTableView } from "@/features/stemtown/components/data-table-view";
 import { FilterBar } from "@/features/stemtown/components/filters";
+import { cn } from "@/lib/utils";
 import { KpiCard } from "@/features/stemtown/components/kpi";
-import { InsightList, Panel } from "@/features/stemtown/components/panel";
+import { InsightList, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { DashboardShell } from "@/features/stemtown/components/shell";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { loadImportedB2B } from "@/features/stemtown/lib/b2b-import";
+import {
+  parseTourFile,
+  saveImportedTours,
+  loadImportedTours,
+  clearImportedTours,
+  downloadTourTemplate,
+} from "@/features/stemtown/lib/tour-import";
 import {
   b2bBranchOptions,
   bucketLabel,
@@ -54,6 +64,9 @@ import {
   targetFor,
   targetForBucket,
   targetSubMetric,
+  tourRows,
+  replaceTourRows,
+  type TourRow,
   type B2BRow,
   type Filters,
 } from "@/features/stemtown/lib/dashboard-data";
@@ -104,6 +117,24 @@ const CROSS_LABELS = {
   entity: "Loại khách hàng",
 };
 
+const TOUR_CROSS_LABELS = {
+  tourBucket: "Tháng",
+  weekday: "Thứ",
+  buoi: "Buổi",
+  tienDo: "Tiến độ",
+  truong: "Trường",
+};
+
+/** Thứ tự cố định của buổi tham quan, dùng cho legend/màu — theo cột "Khung giờ":
+ *  trước 12:00 -> Sáng, từ 12:01 -> Chiều, "Full ngày" -> Full ngày, còn lại -> Không xác định. */
+const BUOI_ORDER = ["Sáng", "Chiều", "Full ngày", "Không xác định"] as const;
+const BUOI_COLORS: Record<string, string> = {
+  "Sáng": CHART_COLORS.dark,
+  "Chiều": CHART_COLORS.primary,
+  "Full ngày": CHART_COLORS.accent,
+  "Không xác định": CHART_COLORS.axis,
+};
+
 /** Khoảng đơn giá theo cột T "DonGia" (đọc thẳng, không tự tính lại từ DoanhThuNet/HS). */
 const bandOf = (r: B2BRow): string | null => {
   const price = r.donGia;
@@ -132,6 +163,7 @@ export function B2BPage() {
   const [dataVersion, setDataVersion] = useState(0);
   const [imported, setImported] = useState(false);
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [openTourMonths, setOpenTourMonths] = useState<Record<string, boolean>>({});
 
   const applyRows = useCallback((raw: Record<string, unknown>[] | null) => {
     const rows = replaceB2BRows(raw);
@@ -149,6 +181,120 @@ export function B2BPage() {
     if (stored) applyRows(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ------------------------------------------------------------------ */
+  /* Lịch tour B2B dự kiến — nguồn riêng, sel/tab riêng                   */
+  /* ------------------------------------------------------------------ */
+  const [tourView, setTourView] = useState<"dashboard" | "table">("dashboard");
+  const [tourDataVersion, setTourDataVersion] = useState(0);
+  const [tourImported, setTourImported] = useState(false);
+  const { sel: tourSel, toggle: tourToggle, clear: tourClear, clearAll: tourClearAll, chips: tourChips } = useCrossFilter(TOUR_CROSS_LABELS);
+
+  const applyTourRows = useCallback(
+    (raw: Record<string, unknown>[] | null) => {
+      replaceTourRows(raw);
+      setTourImported(Boolean(raw));
+      tourClearAll();
+      setTourDataVersion((v) => v + 1);
+    },
+    [tourClearAll],
+  );
+
+  useEffect(() => {
+    const stored = loadImportedTours();
+    if (stored) applyTourRows(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const tourData = useMemo(() => {
+    const rows = tourRows.filter(
+      (r) =>
+        matchSel(r.schoolName, tourSel["truong"]) &&
+        matchSel(r.status, tourSel["tienDo"]) &&
+        matchSel(r.buoi, tourSel["buoi"]) &&
+        matchSel(bucketOf(r.date, "month"), tourSel["tourBucket"]) &&
+        matchSel(bucketOf(r.date, "weekday"), tourSel["weekday"]),
+    );
+
+    const totalTours = rows.length;
+    const totalStudents = rows.reduce((s, r) => s + r.students, 0);
+    const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+
+    /* Số lượng lượt tour theo thời gian (tháng), chia theo Buổi. */
+    const months = sortBuckets(Array.from(new Set(rows.map((r) => bucketOf(r.date, "month")))), "month");
+    const timeByBuoi = months.map((m) => {
+      const mRows = rows.filter((r) => bucketOf(r.date, "month") === m);
+      const entry: Record<string, number | string> = { bucket: m, name: bucketLabel(m, "month") };
+      for (const b of BUOI_ORDER) entry[b] = mRows.filter((r) => r.buoi === b).length;
+      entry.total = mRows.length;
+      return entry;
+    });
+
+    /* Số lượng lượt tour theo Tiến độ. */
+    const statusMap = new Map<string, number>();
+    for (const r of rows) statusMap.set(r.status, (statusMap.get(r.status) ?? 0) + 1);
+    const statusChart = Array.from(statusMap.entries())
+      .map(([name, value]) => ({ name, value, share: totalTours ? (value / totalTours) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value);
+
+    /* Top trường theo Doanh thu dự kiến. */
+    const schoolMap = new Map<string, { revenue: number; count: number }>();
+    for (const r of rows) {
+      const cur = schoolMap.get(r.schoolName) ?? { revenue: 0, count: 0 };
+      cur.revenue += r.revenue;
+      cur.count += 1;
+      schoolMap.set(r.schoolName, cur);
+    }
+    const topSchools = Array.from(schoolMap.entries())
+      .map(([name, v]) => ({
+        name,
+        value: v.revenue,
+        count: v.count,
+        share: totalRevenue ? (v.revenue / totalRevenue) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    /* Matrix Tháng, Tuần & Thứ, Buổi — value = SL HS. "Full ngày" tính vào cả Sáng lẫn Chiều
+     * (chiếm trọn slot); "Không xác định" không quy được vào Sáng/Chiều nên không tính vào matrix này. */
+    const inSang = (r: TourRow) => r.buoi === "Sáng" || r.buoi === "Full ngày";
+    const inChieu = (r: TourRow) => r.buoi === "Chiều" || r.buoi === "Full ngày";
+    const womOf = (dateStr: string) => Math.floor((Number(dateStr.split("-")[2] ?? "1") - 1) / 7) + 1;
+    const cellOf = (rs: TourRow[]) => ({
+      sang: rs.filter(inSang).reduce((s, r) => s + r.students, 0),
+      chieu: rs.filter(inChieu).reduce((s, r) => s + r.students, 0),
+    });
+    const tourMatrix = months.map((mk) => {
+      const mRows = rows.filter((r) => bucketOf(r.date, "month") === mk);
+      const weekNums = Array.from(new Set(mRows.map((r) => womOf(r.date)))).sort((a, b) => a - b);
+      const weeks = weekNums.map((wn) => {
+        const wRows = mRows.filter((r) => womOf(r.date) === wn);
+        const cells = WEEKDAY_ORDER.map((wd) => ({
+          weekday: wd,
+          ...cellOf(wRows.filter((r) => bucketOf(r.date, "weekday") === wd)),
+        }));
+        return { weekLabel: `Tuần ${wn}`, cells, total: wRows.reduce((s, r) => s + r.students, 0) };
+      });
+      const monthCells = WEEKDAY_ORDER.map((wd) => ({
+        weekday: wd,
+        ...cellOf(mRows.filter((r) => bucketOf(r.date, "weekday") === wd)),
+      }));
+      return {
+        monthKey: mk,
+        month: bucketLabel(mk, "month"),
+        weeks,
+        monthCells,
+        total: mRows.reduce((s, r) => s + r.students, 0),
+      };
+    });
+    const tourMatrixMax = Math.max(
+      1,
+      ...tourMatrix.flatMap((m) => m.weeks.flatMap((w) => w.cells.flatMap((c) => [c.sang, c.chieu]))),
+      ...tourMatrix.flatMap((m) => m.monthCells.flatMap((c) => [c.sang, c.chieu])),
+    );
+
+    return { rows, totalTours, totalStudents, totalRevenue, timeByBuoi, statusChart, topSchools, tourMatrix, tourMatrixMax };
+  }, [tourDataVersion, tourSel]);
 
 
   const data = useMemo(() => {
@@ -445,6 +591,21 @@ export function B2BPage() {
     { key: "date", header: "Ngày tạo biên bản", render: (r) => r.createdDate || "—" },
     { key: "creator", header: "Người tạo biên bản", render: (r) => r.creator },
   ];
+
+  const tourColumns: Column<TourRow>[] = [
+    { key: "date", header: "Ngày tham quan", render: (r) => toDMY(r.date) },
+    { key: "buoi", header: "Buổi", render: (r) => r.buoi },
+    { key: "timeRaw", header: "Khung giờ", render: (r) => r.timeRaw ?? "—" },
+    { key: "schoolName", header: "Tên trường", render: (r) => r.schoolName, noTruncate: true },
+    { key: "region", header: "Khu vực", render: (r) => r.region ?? "—" },
+    { key: "grade", header: "Khối lớp", render: (r) => r.grade ?? "—" },
+    { key: "students", header: "SL HS", render: (r) => formatNumber(r.students), align: "right" },
+    { key: "sale", header: "Sale", render: (r) => r.sale ?? "—" },
+    { key: "status", header: "Tiến độ", render: (r) => r.status },
+    { key: "price", header: "Giá vé (đ)", render: (r) => formatNumber(r.price), align: "right" },
+    { key: "revenue", header: "Doanh thu dự kiến (đ)", render: (r) => formatNumber(r.revenue), align: "right" },
+  ];
+  const sortedTourRows = [...tourData.rows].sort((a, b) => a.date.localeCompare(b.date));
 
   // Ngày trải nghiệm gần nhất (gần hôm nay) hiển thị trên cùng.
   const sortedRows = [...data.rows].sort((a, b) =>
@@ -913,117 +1074,119 @@ export function B2BPage() {
         </Panel>
       </div>
 
-      <Panel
-        title="Top 10 khách hàng chi tiêu nhiều nhất"
-        subtitle="Bấm vào khách hàng để lọc chéo toàn trang"
-        code="CH-B2B-07"
-        isEmpty={data.byCustomer.length === 0}
-      >
-        <ResponsiveContainer width="100%" height={Math.max(360, data.byCustomer.length * 38 + 40)}>
-          <BarChart data={data.byCustomer} layout="vertical" margin={{ top: 8, right: 64, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
-            <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              {...axisProps}
-              width={340}
-              interval={0}
-            />
-            <Tooltip
-              cursor={{ fill: "var(--secondary)" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0]?.payload as { value: number; hopDong: number; nghiemThu: number };
-                return (
-                  <TooltipBox label={String(label)}>
-                    <TooltipRow
-                      name="Doanh thu"
-                      value={row.value}
-                      share={data.revenue ? (row.value / data.revenue) * 100 : undefined}
-                    />
-                    <TooltipRow name="Số HS hợp đồng" value={row.hopDong} unit="học sinh" />
-                    <TooltipRow name="Số HS nghiệm thu" value={row.nghiemThu} unit="học sinh" />
-                  </TooltipBox>
-                );
-              }}
-            />
-            <Bar
-              dataKey="value"
-              radius={[0, 4, 4, 0]}
-              cursor="pointer"
-              onClick={(d: { name?: string }) => toggle("customer", d?.name)}
-            >
-              {data.byCustomer.map((d) => (
-                <Cell
-                  key={d.name}
-                  fill={
-                    d.segment === "Công ty"
-                      ? sel["customer"] && sel["customer"] !== d.name
-                        ? "var(--brand-support)"
-                        : COMPANY_COLOR
-                      : cellFill(d.name, sel["customer"], CHART_COLORS.primary)
-                  }
-                />
-              ))}
-              <LabelList
-                dataKey="value"
-                position="right"
-                formatter={(v: number) => formatShort(v)}
-                style={{ fontSize: 10, fill: CHART_COLORS.axis }}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel
+          title="Top 10 khách hàng chi tiêu nhiều nhất"
+          subtitle="Bấm vào khách hàng để lọc chéo toàn trang"
+          code="CH-B2B-07"
+          isEmpty={data.byCustomer.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={Math.max(360, data.byCustomer.length * 38 + 40)}>
+            <BarChart data={data.byCustomer} layout="vertical" margin={{ top: 8, right: 64, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                {...axisProps}
+                width={200}
+                interval={0}
               />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </Panel>
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as { value: number; hopDong: number; nghiemThu: number };
+                  return (
+                    <TooltipBox label={String(label)}>
+                      <TooltipRow
+                        name="Doanh thu"
+                        value={row.value}
+                        share={data.revenue ? (row.value / data.revenue) * 100 : undefined}
+                      />
+                      <TooltipRow name="Số HS hợp đồng" value={row.hopDong} unit="học sinh" />
+                      <TooltipRow name="Số HS nghiệm thu" value={row.nghiemThu} unit="học sinh" />
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Bar
+                dataKey="value"
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: { name?: string }) => toggle("customer", d?.name)}
+              >
+                {data.byCustomer.map((d) => (
+                  <Cell
+                    key={d.name}
+                    fill={
+                      d.segment === "Công ty"
+                        ? sel["customer"] && sel["customer"] !== d.name
+                          ? "var(--brand-support)"
+                          : COMPANY_COLOR
+                        : cellFill(d.name, sel["customer"], CHART_COLORS.primary)
+                    }
+                  />
+                ))}
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  formatter={(v: number) => formatShort(v)}
+                  style={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
 
-      <Panel
-        title="Đơn giá học sinh theo phân khúc"
-        subtitle="Thống kê theo số Hợp đồng và BBNT"
-        code="CH-B2B-08"
-        isEmpty={data.priceBands.every((b) => b.bienBan === 0 && b.hopDong === 0)}
-      >
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart
-            data={data.priceBands}
-            margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
-            onClick={(e: { activePayload?: { payload?: { name?: string } }[] }) =>
-              toggle("band", e?.activePayload?.[0]?.payload?.name)
-            }
-            style={{ cursor: "pointer" }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-            <XAxis dataKey="name" {...axisProps} />
-            <YAxis {...axisProps} width={40} />
-            <Tooltip
-              cursor={{ fill: "var(--secondary)" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0]?.payload as { bienBan: number; hopDong: number };
-                return (
-                  <TooltipBox label={String(label)}>
-                    <TooltipRow color={CHART_COLORS.primary} name="Số BBNT" value={row.bienBan} unit="biên bản" />
-                    <TooltipRow color={CHART_COLORS.dark} name="Số Hợp đồng" value={row.hopDong} unit="hợp đồng" />
-                  </TooltipBox>
-                );
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="bienBan" name="Số BBNT" radius={[4, 4, 0, 0]} cursor="pointer">
-              {data.priceBands.map((d) => (
-                <Cell key={d.name} fill={cellFill(d.name, sel["band"], CHART_COLORS.primary)} />
-              ))}
-              <LabelList dataKey="bienBan" position="top" style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
-            </Bar>
-            <Bar dataKey="hopDong" name="Số Hợp đồng" radius={[4, 4, 0, 0]} cursor="pointer">
-              {data.priceBands.map((d) => (
-                <Cell key={d.name} fill={cellFill(d.name, sel["band"], CHART_COLORS.dark)} />
-              ))}
-              <LabelList dataKey="hopDong" position="top" style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </Panel>
+        <Panel
+          title="Đơn giá học sinh theo phân khúc"
+          subtitle="Thống kê theo số Hợp đồng và BBNT"
+          code="CH-B2B-08"
+          isEmpty={data.priceBands.every((b) => b.bienBan === 0 && b.hopDong === 0)}
+        >
+          <ResponsiveContainer width="100%" height={Math.max(360, data.byCustomer.length * 38 + 40)}>
+            <BarChart
+              data={data.priceBands}
+              margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
+              onClick={(e: { activePayload?: { payload?: { name?: string } }[] }) =>
+                toggle("band", e?.activePayload?.[0]?.payload?.name)
+              }
+              style={{ cursor: "pointer" }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="name" {...axisProps} />
+              <YAxis {...axisProps} width={40} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload as { bienBan: number; hopDong: number };
+                  return (
+                    <TooltipBox label={String(label)}>
+                      <TooltipRow color={CHART_COLORS.primary} name="Số BBNT" value={row.bienBan} unit="biên bản" />
+                      <TooltipRow color={CHART_COLORS.dark} name="Số Hợp đồng" value={row.hopDong} unit="hợp đồng" />
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="bienBan" name="Số BBNT" radius={[4, 4, 0, 0]} cursor="pointer">
+                {data.priceBands.map((d) => (
+                  <Cell key={d.name} fill={cellFill(d.name, sel["band"], CHART_COLORS.primary)} />
+                ))}
+                <LabelList dataKey="bienBan" position="top" style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+              <Bar dataKey="hopDong" name="Số Hợp đồng" radius={[4, 4, 0, 0]} cursor="pointer">
+                {data.priceBands.map((d) => (
+                  <Cell key={d.name} fill={cellFill(d.name, sel["band"], CHART_COLORS.dark)} />
+                ))}
+                <LabelList dataKey="hopDong" position="top" style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
 
       <Panel
         title="Số lần hợp tác của từng khách hàng"
@@ -1193,6 +1356,312 @@ export function B2BPage() {
         rows={sortedRows}
         fileName="b2b-bien-ban-nghiem-thu"
       />
+      <SectionHeader
+        title="Lịch tour B2B dự kiến"
+        subtitle="Dựa trên lịch tham quan đã xếp lịch (kể cả chưa nghiệm thu) — nguồn dữ liệu riêng, không tính vào doanh thu B2B ở trên"
+        icon={<CalendarClock className="size-4" />}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+          {(
+            [
+              { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+              { id: "table", label: "Dạng bảng", icon: Table2 },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTourView(t.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                tourView === t.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60",
+              )}
+            >
+              <t.icon className="size-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+        {tourChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tourChips.map((c) => (
+              <button
+                key={c.dim}
+                type="button"
+                onClick={() => tourClear(c.dim)}
+                className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+              >
+                {c.label} ✕
+              </button>
+            ))}
+            <button type="button" onClick={tourClearAll} className="text-xs text-muted-foreground underline">
+              Đặt lại
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ImportDataBar
+        onImported={applyTourRows}
+        imported={tourImported}
+        title="Cập nhật dữ liệu B2B"
+        description="Tải template, điền Lịch tour B2B theo đúng cột rồi import file CSV/JSON."
+        parseFile={parseTourFile}
+        saveRows={saveImportedTours}
+        clearRows={clearImportedTours}
+        downloadTemplate={downloadTourTemplate}
+        templateLabel="Template Lịch tour"
+      />
+
+      {tourView === "table" ? (
+        <DataTableView columns={tourColumns} rows={sortedTourRows} fileName="b2b-lich-tour" />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <KpiCard label="Số lượt tour dự kiến" numeric={tourData.totalTours} format={(n) => formatNumber(Math.round(n))} unit="lượt" change={null} icon={<CalendarClock className="size-4" />} />
+            <KpiCard label="Tổng số học sinh dự kiến" numeric={tourData.totalStudents} format={(n) => formatNumber(Math.round(n))} unit="học sinh" change={null} icon={<Users className="size-4" />} />
+            <KpiCard label="Doanh thu dự kiến" numeric={tourData.totalRevenue} format={formatCurrency} change={null} icon={<Wallet className="size-4" />} />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Panel
+              title="Số lượng lượt tour dự kiến theo thời gian"
+              subtitle="Chia theo Buổi: Sáng (trước 12:00) / Chiều (từ 12:01) / Full ngày"
+              code="CH-TOUR-01"
+              isEmpty={tourData.timeByBuoi.length === 0}
+            >
+              <ResponsiveContainer width="100%" height={320}>
+                <ComposedChart
+                  data={tourData.timeByBuoi}
+                  margin={{ top: 16, right: 8, left: 0, bottom: 0 }}
+                  onClick={(e: { activePayload?: { payload?: { bucket?: string } }[] }) =>
+                    tourToggle("tourBucket", e?.activePayload?.[0]?.payload?.bucket)
+                  }
+                  style={{ cursor: "pointer" }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="name" {...axisProps} />
+                  <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={40} />
+                  <Tooltip
+                    cursor={{ fill: "var(--secondary)" }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = payload[0]?.payload as Record<string, number | string>;
+                      const total = Number(row["total"] ?? 0);
+                      return (
+                        <TooltipBox label={String(label)}>
+                          {BUOI_ORDER.map((b) => (
+                            <TooltipRow
+                              key={b}
+                              color={BUOI_COLORS[b]}
+                              name={b}
+                              value={Number(row[b] ?? 0)}
+                              unit="lượt"
+                              share={total ? (Number(row[b] ?? 0) / total) * 100 : undefined}
+                            />
+                          ))}
+                          <TooltipRow name="Tổng lượt tour" value={total} unit="lượt" />
+                        </TooltipBox>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {BUOI_ORDER.map((b, i) => (
+                    <Bar key={b} dataKey={b} name={b} stackId="a" fill={BUOI_COLORS[b]}>
+                      {i === BUOI_ORDER.length - 1 && (
+                        <LabelList dataKey="total" position="top" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                      )}
+                    </Bar>
+                  ))}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Panel>
+
+            <Panel
+              title="Số lượng lượt tour dự kiến theo Tiến độ"
+              subtitle="Ô trống ở cột Tiến độ được gộp vào “Chưa xác định”"
+              code="CH-TOUR-02"
+              isEmpty={tourData.statusChart.length === 0}
+            >
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={tourData.statusChart}
+                  margin={{ top: 16, right: 8, left: 0, bottom: 16 }}
+                  onClick={(e: { activePayload?: { payload?: { name?: string } }[] }) =>
+                    tourToggle("tienDo", e?.activePayload?.[0]?.payload?.name)
+                  }
+                  style={{ cursor: "pointer" }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="name" {...axisProps} height={38} tick={XCategoryTick} interval={0} />
+                  <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={40} />
+                  <Tooltip
+                    cursor={{ fill: "var(--secondary)" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = payload[0]?.payload as { name: string; value: number; share: number };
+                      return (
+                        <TooltipBox label={row.name}>
+                          <TooltipRow name="Số lượt tour" value={row.value} unit="lượt" share={row.share} />
+                        </TooltipBox>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} fill={CHART_COLORS.primary} cursor="pointer">
+                    {tourData.statusChart.map((d) => (
+                      <Cell key={d.name} fill={cellFill(d.name, tourSel["tienDo"], CHART_COLORS.primary)} />
+                    ))}
+                    <LabelList dataKey="value" position="top" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+          </div>
+
+          <Panel
+            title="Top trường theo Doanh thu dự kiến"
+            subtitle="Bấm vào cột để lọc chéo toàn khu vực Lịch tour B2B"
+            code="CH-TOUR-03"
+            isEmpty={tourData.topSchools.length === 0}
+          >
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart data={tourData.topSchools} layout="vertical" margin={{ top: 8, right: 60, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+                <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
+                <YAxis type="category" dataKey="name" {...axisProps} width={170} tick={YCategoryTick} />
+                <Tooltip
+                  cursor={{ fill: "var(--secondary)" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as { name: string; value: number; count: number; share: number };
+                    return (
+                      <TooltipBox label={row.name}>
+                        <TooltipRow name="Doanh thu dự kiến" value={row.value} share={row.share} />
+                        <TooltipRow name="Số lượt tour" value={row.count} unit="lượt" />
+                      </TooltipBox>
+                    );
+                  }}
+                />
+                <Bar
+                  dataKey="value"
+                  radius={[0, 4, 4, 0]}
+                  cursor="pointer"
+                  onClick={(d: { name?: string }) => tourToggle("truong", d?.name)}
+                >
+                  {tourData.topSchools.map((d) => (
+                    <Cell key={d.name} fill={cellFill(d.name, tourSel["truong"], CHART_COLORS.primary)} />
+                  ))}
+                  <LabelList dataKey="value" position="right" formatter={(v: number) => formatShort(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
+
+          <Panel
+            title="Matrix Tháng, Tuần & Thứ, Buổi"
+            subtitle="Giá trị: tổng SL HS mỗi buổi. Bấm vào tháng để bung/gập tuần; Full ngày tính vào cả Sáng lẫn Chiều"
+            code="CH-TOUR-04"
+            isEmpty={tourData.tourMatrix.length === 0}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th rowSpan={2} className="px-2 py-1 text-left font-medium align-bottom">
+                      Tháng / Tuần
+                    </th>
+                    {WEEKDAY_ORDER.map((w) => (
+                      <th key={w} colSpan={2} className="border-l border-border/60 px-2 py-1 text-center font-medium">
+                        {w}
+                      </th>
+                    ))}
+                    <th rowSpan={2} className="px-2 py-1 text-right font-medium align-bottom">
+                      Tổng
+                    </th>
+                  </tr>
+                  <tr className="text-muted-foreground">
+                    {WEEKDAY_ORDER.map((w) => (
+                      <Fragment key={w}>
+                        <th className="border-l border-border/60 px-1.5 py-1 text-right font-normal">Sáng</th>
+                        <th className="px-1.5 py-1 text-right font-normal">Chiều</th>
+                      </Fragment>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tourData.tourMatrix.map((m) => {
+                    const open = openTourMonths[m.monthKey] ?? false;
+                    const tint = (v: number) =>
+                      v > 0
+                        ? `color-mix(in oklab, var(--primary) ${Math.round((v / tourData.tourMatrixMax) * 70) + 8}%, transparent)`
+                        : undefined;
+                    return (
+                      <Fragment key={m.monthKey}>
+                        <tr
+                          className="cursor-pointer border-t border-border/60 font-semibold hover:bg-secondary/60"
+                          onClick={() => {
+                            setOpenTourMonths((s) => ({ ...s, [m.monthKey]: !open }));
+                            tourToggle("tourBucket", m.monthKey);
+                          }}
+                        >
+                          <td className="px-2 py-1 whitespace-nowrap">
+                            <span className="inline-block w-3 text-muted-foreground">{open ? "▾" : "▸"}</span> {m.month}
+                          </td>
+                          {m.monthCells.map((c) => (
+                            <Fragment key={c.weekday}>
+                              <td
+                                title={`${m.month} · ${c.weekday} · Sáng: ${formatNumber(c.sang)} HS`}
+                                className="border-l border-border/60 px-1.5 py-1 text-right tabular-nums"
+                                style={{ background: tint(c.sang) }}
+                              >
+                                {c.sang > 0 ? formatNumber(c.sang) : "—"}
+                              </td>
+                              <td
+                                title={`${m.month} · ${c.weekday} · Chiều: ${formatNumber(c.chieu)} HS`}
+                                className="px-1.5 py-1 text-right tabular-nums"
+                                style={{ background: tint(c.chieu) }}
+                              >
+                                {c.chieu > 0 ? formatNumber(c.chieu) : "—"}
+                              </td>
+                            </Fragment>
+                          ))}
+                          <td className="px-2 py-1 text-right tabular-nums">{formatNumber(m.total)}</td>
+                        </tr>
+                        {open &&
+                          m.weeks.map((w) => (
+                            <tr key={`${m.monthKey}-${w.weekLabel}`} className="text-muted-foreground">
+                              <td className="px-2 py-1 pl-7 whitespace-nowrap">{w.weekLabel}</td>
+                              {w.cells.map((c) => (
+                                <Fragment key={c.weekday}>
+                                  <td
+                                    title={`${m.month} · ${w.weekLabel} · ${c.weekday} · Sáng: ${formatNumber(c.sang)} HS`}
+                                    className="border-l border-border/60 px-1.5 py-1 text-right tabular-nums"
+                                    style={{ background: tint(c.sang) }}
+                                  >
+                                    {c.sang > 0 ? formatNumber(c.sang) : "—"}
+                                  </td>
+                                  <td
+                                    title={`${m.month} · ${w.weekLabel} · ${c.weekday} · Chiều: ${formatNumber(c.chieu)} HS`}
+                                    className="px-1.5 py-1 text-right tabular-nums"
+                                    style={{ background: tint(c.chieu) }}
+                                  >
+                                    {c.chieu > 0 ? formatNumber(c.chieu) : "—"}
+                                  </td>
+                                </Fragment>
+                              ))}
+                              <td className="px-2 py-1 text-right font-medium tabular-nums">{formatNumber(w.total)}</td>
+                            </tr>
+                          ))}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </>
+      )}
+
       <CustomChartsSection dataset="b2b" />
     </DashboardShell>
   );

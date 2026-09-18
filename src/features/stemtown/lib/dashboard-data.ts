@@ -1,5 +1,6 @@
 import rawB2C from "@/features/stemtown/data/b2c.json";
 import rawB2B from "@/features/stemtown/data/b2b.json";
+import rawTours from "@/features/stemtown/data/b2b-tours.json";
 import type { SubMetric } from "@/features/stemtown/components/kpi";
 import { formatPercent, formatTargetShort } from "@/features/stemtown/lib/format";
 
@@ -312,6 +313,101 @@ export function setB2BBase(raw: Record<string, unknown>[] | null) {
 export function replaceB2BRows(raw: Record<string, unknown>[] | null) {
   b2bRows = mapB2B(raw && raw.length ? raw : b2bBaseRaw);
   return b2bRows;
+}
+
+/* ------------------------------------------------------------------ */
+/* Lịch tour B2B dự kiến ("B2B - Trường cụ thể")                       */
+/* Nguồn riêng, KHÔNG đi qua Filters/model chung (không có category/    */
+/* branch/source) — chỉ lọc theo khoảng ngày tham quan.                */
+/* ------------------------------------------------------------------ */
+
+export type TourRow = {
+  date: string;
+  /** "Sáng" (trước 12:00) / "Chiều" (từ 12:01) / "Full ngày" / "Không xác định" (không đọc được khung giờ). */
+  buoi: "Sáng" | "Chiều" | "Full ngày" | "Không xác định";
+  timeRaw: string | null;
+  students: number;
+  grade: string | null;
+  schoolName: string;
+  region: string | null;
+  sale: string | null;
+  /** Cột "Tiến độ"; ô trống -> "Chưa xác định". "Done"/"done" gộp về 1 nhãn "Done". */
+  status: string;
+  price: number;
+  revenue: number;
+};
+
+function buoiOf(raw: unknown): TourRow["buoi"] {
+  if (typeof raw !== "string") return "Không xác định";
+  const s = raw.trim();
+  if (!s) return "Không xác định";
+  if (/full\s*ng[aà]y/i.test(s)) return "Full ngày";
+  const m = s.match(/(\d{1,2})[:h](\d{2})/);
+  if (!m) return "Không xác định";
+  const mins = Number(m[1]) * 60 + Number(m[2]);
+  return mins < 12 * 60 ? "Sáng" : "Chiều";
+}
+
+function statusOf(raw: unknown): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s) return "Chưa xác định";
+  return s.toLowerCase() === "done" ? "Done" : s;
+}
+
+export const TOUR_COLUMNS = [
+  "Ngày tham quan",
+  "Khung giờ",
+  "SL HS",
+  "Khối lớp",
+  "Tên trường",
+  "Khu vực",
+  "Sale",
+  "Tiến độ",
+  "Giá vé",
+  "Doanh thu dự kiến",
+] as const;
+
+export function mapTours(raw: Record<string, unknown>[]): TourRow[] {
+  return raw
+    .filter((r) => toStr(r["Ngày tham quan"]) && toStr(r["Tên trường"]))
+    .map((r) => ({
+      date: (toStr(r["Ngày tham quan"]) ?? "").slice(0, 10),
+      buoi: buoiOf(r["Khung giờ"]),
+      timeRaw: toStr(r["Khung giờ"]),
+      students: toNum(r["SL HS"]),
+      grade: toStr(r["Khối lớp"]),
+      schoolName: toStr(r["Tên trường"]) ?? "Không xác định",
+      region: toStr(r["Khu vực"]),
+      sale: toStr(r["Sale"]),
+      status: statusOf(r["Tiến độ"]),
+      price: toNum(r["Giá vé"]),
+      revenue: toNum(r["Doanh thu dự kiến"]),
+    }));
+}
+
+export const tourSampleRaw = rawTours as Record<string, unknown>[];
+
+/** Dữ liệu tour "nền" (sau này nối Google Sheet thật sẽ nạp qua setToursBase; hiện tại là data mẫu). */
+let tourBaseRaw: Record<string, unknown>[] = tourSampleRaw;
+
+// eslint-disable-next-line prefer-const
+export let tourRows: TourRow[] = mapTours(tourBaseRaw);
+
+/** Đặt dữ liệu tour nền (dùng khi nạp từ Google Sheet); rỗng -> quay về data mẫu. */
+export function setToursBase(raw: Record<string, unknown>[] | null) {
+  tourBaseRaw = raw && raw.length ? raw : tourSampleRaw;
+  tourRows = mapTours(tourBaseRaw);
+  return tourRows;
+}
+
+/** Thay bằng dữ liệu user import (chạy phía client); rỗng -> quay về data nền. */
+export function replaceTourRows(raw: Record<string, unknown>[] | null) {
+  tourRows = mapTours(raw && raw.length ? raw : tourBaseRaw);
+  return tourRows;
+}
+
+export function filterTours(from: string, to: string): TourRow[] {
+  return tourRows.filter((r) => r.date >= from && r.date <= to);
 }
 
 
