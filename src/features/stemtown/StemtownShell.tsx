@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Building2, LayoutGrid, Loader2, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, Building2, CalendarClock, LayoutGrid, Loader2, RotateCcw, ShoppingBag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,17 @@ import { loadStemtownData } from "@/features/stemtown/lib/data-source";
 import { OverviewPage } from "@/features/stemtown/views/overview";
 import { B2CPage } from "@/features/stemtown/views/b2c";
 import { B2BPage } from "@/features/stemtown/views/b2b";
+import { TourPage } from "@/features/stemtown/views/b2b-tours";
 
 const TABS = [
   { key: "overview", label: "Tổng quan", icon: LayoutGrid, render: () => <OverviewPage /> },
   { key: "b2c", label: "B2C - Khách lẻ", icon: ShoppingBag, render: () => <B2CPage /> },
   { key: "b2b", label: "B2B - Khách đoàn", icon: Building2, render: () => <B2BPage /> },
+  { key: "tours", label: "Lịch tour B2B", icon: CalendarClock, render: () => <TourPage /> },
 ] as const;
 
 /**
- * Dashboard STEM TOWN — nạp dữ liệu từ Google Sheet rồi render 3 view.
+ * Dashboard STEM TOWN — nạp dữ liệu từ Google Sheet rồi render 4 view.
  * Tối ưu: giữ tab đã mở trong DOM (không dựng lại mỗi lần đổi tab -> đổi tức thì);
  * gắn dataUpdatedAt vào key nên khi "Làm mới dữ liệu" thì tab đang xem tự cập nhật ngay.
  */
