@@ -1,0 +1,1377 @@
+import { AlertTriangle, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, RotateCcw } from "lucide-react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "@/features/stemtown/components/chart-kit";
+import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
+import { ImportDataBar } from "@/features/stemtown/components/import-data";
+import { KpiCard } from "@/features/stemtown/components/kpi";
+import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
+import { bucketLabel, replaceTourRows, tourRows } from "@/features/stemtown/lib/dashboard-data";
+import { formatNumber, formatShort } from "@/features/stemtown/lib/format";
+import {
+  clearImportedTours,
+  downloadTourTemplate,
+  loadImportedTours,
+  parseTourFile,
+  saveImportedTours,
+} from "@/features/stemtown/lib/tour-import";
+import {
+  TOUR_RULES,
+  QUICK_RANGES,
+  WEEKDAYS,
+  addDays,
+  commercialTours,
+  dayInfo,
+  dm,
+  enrichTours,
+  hhmm,
+  monthLabel,
+  monthRange,
+  monthShort,
+  mondayOf,
+  quickRange,
+  todayVN,
+  weekdayIdx,
+  weeksOfMonth,
+  type DayInfo,
+  type DateRange,
+  type TourItem,
+  type TourKind,
+} from "@/features/stemtown/lib/tour-rules";
+import { cn } from "@/lib/utils";
+
+/* ------------------------------------------------------------------ */
+/* Màu cố định theo CHỈ SỐ (giữ nguyên ở mọi chart của trang này)       */
+/* ------------------------------------------------------------------ */
+/** Cam = chú ý / vượt ngưỡng sức chứa — chỉ dùng cho cảnh báo. */
+const WARN = CHART_COLORS.accent;
+const mix = (c: string, pct: number) => `color-mix(in oklab, ${c} ${pct}%, transparent)`;
+const KIND_LABEL: Record<TourKind, string> = { tour: "Tour", guest: "Khách mời, CBQL", block: "Sự kiện chặn lịch" };
+const fTr = (v: number) => `${formatNumber(v / 1_000_000, v < 100_000_000 ? 1 : 0)}tr`;
+const fK = (v: number) => `${formatNumber(Math.round(v / 1000))}k`;
+const toDMY = (s: string) => `${s.slice(8, 10)}-${s.slice(5, 7)}-${s.slice(2, 4)}`;
+const selectCls = "h-9 min-w-40 rounded-md border border-input bg-card px-3 text-sm";
+
+/* ================================================================== */
+/* Trang Lịch tour B2B: 2 tab con Tổng quan / Lịch tour                */
+/* ================================================================== */
+
+export function TourSection() {
+  const [version, setVersion] = useState(0);
+  const [imported, setImported] = useState(false);
+  const [tab, setTab] = useState<"overview" | "schedule">("overview");
+  const today = useMemo(() => todayVN(), []);
+
+  const apply = useCallback((raw: Record<string, unknown>[] | null) => {
+    replaceTourRows(raw);
+    setImported(Boolean(raw));
+    setVersion((v) => v + 1);
+  }, []);
+
+  useEffect(() => {
+    const stored = loadImportedTours();
+    if (stored) apply(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const items = useMemo(() => enrichTours(tourRows, today), [version, today]);
+
+  return (
+    <>
+      <SectionHeader
+        title="Lịch tour B2B"
+        subtitle="Dựa trên lịch tham quan đã xếp (kể cả chưa nghiệm thu). Nguồn dữ liệu riêng, doanh thu ở đây là doanh thu dự kiến, không tính vào doanh thu B2B nghiệm thu."
+        icon={<CalendarClock className="size-4" />}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1" role="tablist">
+          {(
+            [
+              { id: "overview", label: "Tổng quan", icon: LayoutGrid },
+              { id: "schedule", label: "Lịch tour", icon: CalendarDays },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                tab === t.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60",
+              )}
+            >
+              <t.icon className="size-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ImportDataBar
+        onImported={apply}
+        imported={imported}
+        title="Cập nhật dữ liệu Lịch tour"
+        description='Đủ các cột gốc của sheet "Lịch tour B2B". Cột "Ngày tham quan" nhập dạng dd/MM/yyyy (vd 31/12/2025). Sheet gốc có 2 cột trùng tên "Note" nên cột cuối đặt là "Note 2".'
+        parseFile={parseTourFile}
+        saveRows={saveImportedTours}
+        clearRows={clearImportedTours}
+        downloadTemplate={downloadTourTemplate}
+        templateLabel="Template Lịch tour"
+      />
+
+      {/* Giữ cả 2 tab trong DOM để đổi tab không mất trạng thái lọc/tuần đang xem */}
+      <div hidden={tab !== "overview"}>
+        <TourOverview key={`o-${version}`} items={items} today={today} />
+      </div>
+      <div hidden={tab !== "schedule"}>
+        <TourSchedule key={`s-${version}`} items={items} today={today} active={tab === "schedule"} />
+      </div>
+    </>
+  );
+}
+
+/* ================================================================== */
+/* TAB 1 — Tổng quan                                                   */
+/* ================================================================== */
+
+/** Bộ lọc khoảng thời gian Từ ngày/Đến ngày + lọc nhanh + đặt lại — cùng style FilterBar B2B/B2C. */
+function TourRangeFilter({
+  range,
+  setRange,
+  today,
+  resetTo,
+  onReset,
+  extra,
+}: {
+  range: DateRange;
+  setRange: (r: DateRange) => void;
+  today: string;
+  resetTo: DateRange;
+  onReset?: () => void;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-xs">
+      <label className="grid gap-1 text-xs text-muted-foreground">
+        Từ ngày
+        <input type="date" className={selectCls} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
+      </label>
+      <label className="grid gap-1 text-xs text-muted-foreground">
+        Đến ngày
+        <input type="date" className={selectCls} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
+      </label>
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Lọc nhanh</span>
+        <div className="flex flex-wrap gap-1">
+          {QUICK_RANGES.map((r) => {
+            const rr = quickRange(r.key, today);
+            const active = range.from === rr.from && range.to === rr.to;
+            return (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(rr)}
+                className={cn(
+                  "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+                  active ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {r.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {extra}
+      <button
+        type="button"
+        onClick={() => {
+          setRange(resetTo);
+          onReset?.();
+        }}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary"
+      >
+        <RotateCcw className="size-3.5" /> Đặt lại tất cả
+      </button>
+    </div>
+  );
+}
+
+/* Màu cố định theo chỉ số ở tab Tổng quan */
+const OC = { dt: CHART_COLORS.primary, tour: CHART_COLORS.dark, hs: CHART_COLORS.support } as const;
+const SALE_NONE = "(Chưa có sale)";
+const BAND_ORDER = ["< 150k", "151k – 200k", "201k – 250k", "251k – 300k", "> 300k"];
+
+/** Cấp học suy từ tên trường — cùng cách chia với phần Nghiệm thu (segmentOf/schoolLevel). */
+function levelOfTour(r: TourItem): string {
+  const lower = r.schoolName.toLowerCase();
+  const up = r.schoolName.toUpperCase();
+  if (lower.includes("công ty")) return "Công ty";
+  if (lower.includes("cao đẳng") || lower.includes("đại học")) return "Khác";
+  if (lower.includes("th-thcs-thpt") || lower.includes("thcs-thpt") || lower.includes("liên cấp")) return "Liên cấp";
+  if (up.startsWith("MN") || up.includes("MẦM NON") || up.includes("MẪU GIÁO")) return "Mầm non/Mẫu giáo";
+  if (up.startsWith("TH ") || up.includes("TIỂU HỌC")) return "Tiểu học";
+  if (up.includes("THCS") || up.includes("TRUNG HỌC CƠ SỞ")) return "THCS";
+  if (up.includes("THPT")) return "THPT";
+  return "Khác";
+}
+
+/** Phân khúc đơn giá học sinh (cột Giá vé) — cùng ngưỡng với phần Nghiệm thu. */
+function bandOfTour(r: TourItem): string | null {
+  const p = r.price;
+  if (!p || p <= 0) return null;
+  if (p < 150_000) return BAND_ORDER[0] as string;
+  if (p <= 200_000) return BAND_ORDER[1] as string;
+  if (p <= 250_000) return BAND_ORDER[2] as string;
+  if (p <= 300_000) return BAND_ORDER[3] as string;
+  return BAND_ORDER[4] as string;
+}
+
+type Grp = { name: string; n: number; hs: number; dt: number };
+type Tot = { n: number; hs: number; dt: number };
+function groupTours(rs: TourItem[], keyFn: (r: TourItem) => string | null): Grp[] {
+  const m = new Map<string, Grp>();
+  rs.forEach((r) => {
+    const k = keyFn(r);
+    if (k === null) return;
+    const g = m.get(k) ?? { name: k, n: 0, hs: 0, dt: 0 };
+    g.n += 1;
+    g.hs += r.students;
+    g.dt += r.revenue;
+    m.set(k, g);
+  });
+  return Array.from(m.values());
+}
+const totalOf = (rs: TourItem[]): Tot => ({ n: rs.length, hs: rs.reduce((a, r) => a + r.students, 0), dt: rs.reduce((a, r) => a + r.revenue, 0) });
+
+/** Tooltip chung: số lượt tour, số học sinh, doanh thu dự kiến — mỗi chỉ số kèm % trên tổng và số tổng. */
+function GroupTooltip({ g, tot, label }: { g: { n: number; hs: number; dt: number }; tot: Tot; label: string }) {
+  return (
+    <TooltipBox label={label}>
+      <TooltipRow color={OC.tour} name="Số lượt tour" value={g.n} unit="tour" share={tot.n ? (g.n / tot.n) * 100 : undefined} />
+      <TooltipRow color={OC.hs} name="Số học sinh" value={g.hs} unit="HS" share={tot.hs ? (g.hs / tot.hs) * 100 : undefined} />
+      <TooltipRow color={OC.dt} name="Doanh thu dự kiến" value={g.dt} share={tot.dt ? (g.dt / tot.dt) * 100 : undefined} />
+      <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
+        Tổng: {formatNumber(tot.n)} tour, {formatNumber(tot.hs)} HS, {fTr(tot.dt)}
+      </p>
+    </TooltipBox>
+  );
+}
+
+type OvSel = { month?: string; sale?: string; level?: string; school?: string; band?: string; weekday?: number };
+const CHART_H = 250;
+
+function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
+  const refYear = today.slice(0, 4);
+  const defaultRange = useMemo(() => quickRange("fyThis", today), [today]);
+  const [range, setRange] = useState<DateRange>(defaultRange);
+  const [statuses, setStatuses] = useState<Set<string>>(() => new Set());
+  const [sel, setSel] = useState<OvSel>({});
+  const toggle = <K extends keyof OvSel>(k: K, v: OvSel[K]) => setSel((s) => (s[k] === v ? { ...s, [k]: undefined } : { ...s, [k]: v }));
+
+  const statusList = useMemo(() => Array.from(new Set(items.map((r) => r.status))).sort(), [items]);
+  const base = useMemo(
+    () =>
+      commercialTours(items, "").filter(
+        (r) => r.date && r.date >= range.from && r.date <= range.to && (statuses.size === 0 || statuses.has(r.status)),
+      ),
+    [items, range, statuses],
+  );
+
+  /** Lọc chéo: bỏ qua đúng dimension của chart đang vẽ để cột khác vẫn hiện (mờ đi) thay vì biến mất. */
+  const rowsExcept = useCallback(
+    (...skip: (keyof OvSel)[]) =>
+      base.filter(
+        (r) =>
+          (skip.includes("month") || !sel.month || r.month === sel.month) &&
+          (skip.includes("sale") || !sel.sale || (r.sale ?? SALE_NONE) === sel.sale) &&
+          (skip.includes("level") || !sel.level || levelOfTour(r) === sel.level) &&
+          (skip.includes("school") || !sel.school || r.schoolName === sel.school) &&
+          (skip.includes("band") || !sel.band || bandOfTour(r) === sel.band) &&
+          (skip.includes("weekday") || sel.weekday === undefined || weekdayIdx(r.date as string) === sel.weekday),
+      ),
+    [base, sel],
+  );
+
+  const rows = useMemo(() => rowsExcept(), [rowsExcept]);
+  const tot = useMemo(() => totalOf(rows), [rows]);
+  const saleCount = useMemo(() => new Set(rows.filter((r) => r.sale).map((r) => r.sale)).size, [rows]);
+
+  const monthKeys = useMemo(() => {
+    const ms = Array.from(new Set(base.map((r) => r.month))).sort();
+    return ms.length ? monthRange(ms[0] as string, ms[ms.length - 1] as string) : [];
+  }, [base]);
+
+  const timeData = useMemo(() => {
+    const rs = rowsExcept("month", "weekday");
+    return monthKeys.map((m) => {
+      const l = rs.filter((r) => r.month === m);
+      const t = totalOf(l);
+      return { m, label: monthShort(m, refYear), dt: t.dt, n: t.n, hs: t.hs };
+    });
+  }, [rowsExcept, monthKeys, refYear]);
+  const timeTot = useMemo(() => timeData.reduce((a, r) => ({ dt: a.dt + r.dt, n: a.n + r.n, hs: a.hs + r.hs }), { dt: 0, n: 0, hs: 0 }), [timeData]);
+
+  const saleData = useMemo(() => groupTours(rowsExcept("sale"), (r) => r.sale ?? SALE_NONE).sort((a, b) => b.n - a.n).slice(0, 10), [rowsExcept]);
+  const saleTot = useMemo(() => totalOf(rowsExcept("sale")), [rowsExcept]);
+  const levelData = useMemo(() => groupTours(rowsExcept("level"), levelOfTour).sort((a, b) => b.n - a.n), [rowsExcept]);
+  const levelTot = useMemo(() => totalOf(rowsExcept("level")), [rowsExcept]);
+  const schoolData = useMemo(() => groupTours(rowsExcept("school"), (r) => r.schoolName).sort((a, b) => b.dt - a.dt).slice(0, 10), [rowsExcept]);
+  const schoolTot = useMemo(() => totalOf(rowsExcept("school")), [rowsExcept]);
+  const bandData = useMemo(() => {
+    const g = groupTours(rowsExcept("band"), bandOfTour);
+    return BAND_ORDER.map((b) => g.find((x) => x.name === b) ?? { name: b, n: 0, hs: 0, dt: 0 });
+  }, [rowsExcept]);
+  const bandTot = useMemo(() => totalOf(rowsExcept("band").filter((r) => bandOfTour(r) !== null)), [rowsExcept]);
+
+  const planAct = useMemo(() => {
+    const rs = rowsExcept("month", "weekday");
+    return monthKeys.map((m) => {
+      const l = rs.filter((r) => r.month === m);
+      const w = l.filter((r) => r.actualStudents !== null);
+      return {
+        m,
+        label: monthShort(m, refYear),
+        n: l.length,
+        k: w.length,
+        plan: l.length ? l.reduce((a, r) => a + r.students, 0) : null,
+        act: w.length ? w.reduce((a, r) => a + (r.actualStudents ?? 0), 0) : null,
+      };
+    });
+  }, [rowsExcept, monthKeys, refYear]);
+
+  /** Heatmap Số tour theo Tháng (hàng) × Thứ (cột). */
+  const heat = useMemo(() => {
+    const rs = rowsExcept("month", "weekday");
+    const cnt = new Map<string, number[]>();
+    rs.forEach((r) => {
+      const a = cnt.get(r.month) ?? [0, 0, 0, 0, 0, 0, 0];
+      const i = weekdayIdx(r.date as string);
+      a[i] = (a[i] ?? 0) + 1;
+      cnt.set(r.month, a);
+    });
+    const ms = Array.from(cnt.keys()).sort();
+    const max = Math.max(1, ...ms.flatMap((m) => cnt.get(m) as number[]));
+    return { ms, cnt, max };
+  }, [rowsExcept]);
+
+  const chips = (
+    [
+      sel.month ? ["month", `Tháng: ${monthLabel(sel.month)}`] : null,
+      sel.weekday !== undefined ? ["weekday", `Thứ: ${WEEKDAYS[sel.weekday]}`] : null,
+      sel.sale ? ["sale", `Sale: ${sel.sale}`] : null,
+      sel.level ? ["level", `Cấp học: ${sel.level}`] : null,
+      sel.school ? ["school", `Trường: ${sel.school}`] : null,
+      sel.band ? ["band", `Đơn giá: ${sel.band}`] : null,
+    ] as ([keyof OvSel, string] | null)[]
+  ).filter((x): x is [keyof OvSel, string] => x !== null);
+
+  const empty = (v: number) => (v === 0 ? "" : formatNumber(v));
+
+  const timeCfgs = [
+    { key: "dt", title: "Doanh thu dự kiến theo thời gian", code: "CH-TOUR-O1", color: OC.dt, fmt: (v: number) => fTr(v), short: (v: number) => fTr(v) },
+    { key: "n", title: "Số tour dự kiến theo thời gian", code: "CH-TOUR-O2", color: OC.tour, fmt: (v: number) => `${formatNumber(v)} tour`, short: (v: number) => empty(v) },
+    { key: "hs", title: "Tổng số học sinh dự kiến theo thời gian", code: "CH-TOUR-O3", color: OC.hs, fmt: (v: number) => `${formatNumber(v)} HS`, short: (v: number) => empty(v) },
+  ] as const;
+
+  const extraFilter = (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tiến độ (chọn nhiều)</span>
+      <div className="flex flex-wrap gap-1">
+        {statusList.map((s) => {
+          const on = statuses.has(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={on}
+              onClick={() =>
+                setStatuses((cur) => {
+                  const n = new Set(cur);
+                  if (n.has(s)) n.delete(s);
+                  else n.add(s);
+                  return n;
+                })
+              }
+              className={cn(
+                "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+                on ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary",
+              )}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <TourRangeFilter
+        range={range}
+        setRange={setRange}
+        today={today}
+        resetTo={defaultRange}
+        onReset={() => {
+          setStatuses(new Set());
+          setSel({});
+        }}
+        extra={extraFilter}
+      />
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Đang lọc chéo:</span>
+          {chips.map(([k, l]) => (
+            <button key={k} type="button" onClick={() => setSel((s) => ({ ...s, [k]: undefined }))} className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 font-medium text-primary">
+              {l} ✕
+            </button>
+          ))}
+          <button type="button" onClick={() => setSel({})} className="text-muted-foreground underline">
+            Bỏ lọc chéo
+          </button>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Doanh thu dự kiến" value={tot.n ? formatNumber(tot.dt / 1_000_000, tot.dt < 100_000_000 ? 1 : 0) : "—"} unit="tr" change={null} />
+        <KpiCard label="Số lượt tour dự kiến" value={formatNumber(tot.n)} unit="tour" change={null} />
+        <KpiCard label="Tổng số học sinh dự kiến" value={tot.n ? formatNumber(tot.hs) : "—"} unit="HS" change={null} />
+        <KpiCard label="Số Sales phụ trách" value={formatNumber(saleCount)} unit="sale" change={null} />
+      </div>
+
+      {/* Hàng 1: 3 chart theo thời gian */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        {timeCfgs.map((c) => (
+          <Panel key={c.key} title={c.title} code={c.code} isEmpty={timeData.every((r) => r[c.key] === 0)}>
+            <ResponsiveContainer width="100%" height={CHART_H}>
+              <BarChart data={timeData} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                <XAxis dataKey="label" {...axisProps} />
+                <YAxis {...axisProps} tickFormatter={(v: number) => (c.key === "dt" ? formatShort(v) : formatNumber(v))} width={46} />
+                <Tooltip
+                  cursor={{ fill: "var(--secondary)" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as (typeof timeData)[number];
+                    const v = row[c.key];
+                    const sum = timeTot[c.key];
+                    return (
+                      <TooltipBox label={monthLabel(row.m)}>
+                        <TooltipRow color={c.color} name={c.title.split(" theo")[0] as string} value={v} unit={c.key === "dt" ? undefined : c.key === "n" ? "tour" : "HS"} share={sum ? (v / sum) * 100 : undefined} />
+                        <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">Tổng các tháng: {c.fmt(sum)}</p>
+                      </TooltipBox>
+                    );
+                  }}
+                />
+                <Bar dataKey={c.key} fill={c.color} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+                  {timeData.map((r) => (
+                    <Cell key={r.m} fill={c.color} fillOpacity={sel.month && sel.month !== r.m ? 0.3 : 1} />
+                  ))}
+                  <LabelList dataKey={c.key} position="top" formatter={(v: number) => (v === 0 ? "" : c.short(v))} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
+        ))}
+      </div>
+
+      {/* Hàng 2: Sale, Cấp học, Top trường */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Panel title="Số tour dự kiến theo Sales" code="CH-TOUR-O4" isEmpty={saleData.length === 0}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <BarChart data={saleData} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={90} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const g = payload[0]?.payload as Grp;
+                  return <GroupTooltip g={g} tot={saleTot} label={g.name} />;
+                }}
+              />
+              <Bar dataKey="n" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: { name?: string }) => toggle("sale", d?.name)}>
+                {saleData.map((r) => (
+                  <Cell key={r.name} fill={OC.tour} fillOpacity={sel.sale && sel.sale !== r.name ? 0.3 : 1} />
+                ))}
+                <LabelList dataKey="n" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel title="Số tour dự kiến theo cấp học" code="CH-TOUR-O5" isEmpty={levelData.length === 0}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <BarChart data={levelData} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={100} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const g = payload[0]?.payload as Grp;
+                  return <GroupTooltip g={g} tot={levelTot} label={g.name} />;
+                }}
+              />
+              <Bar dataKey="n" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: { name?: string }) => toggle("level", d?.name)}>
+                {levelData.map((r) => (
+                  <Cell key={r.name} fill={OC.tour} fillOpacity={sel.level && sel.level !== r.name ? 0.3 : 1} />
+                ))}
+                <LabelList dataKey="n" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel title="Top trường theo doanh thu dự kiến" code="CH-TOUR-O6" isEmpty={schoolData.length === 0}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <BarChart data={schoolData} layout="vertical" margin={{ top: 4, right: 44, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} tickFormatter={(v: number) => formatShort(v)} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={120} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const g = payload[0]?.payload as Grp;
+                  return <GroupTooltip g={g} tot={schoolTot} label={g.name} />;
+                }}
+              />
+              <Bar dataKey="dt" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: { name?: string }) => toggle("school", d?.name)}>
+                {schoolData.map((r) => (
+                  <Cell key={r.name} fill={OC.dt} fillOpacity={sel.school && sel.school !== r.name ? 0.3 : 1} />
+                ))}
+                <LabelList dataKey="dt" position="right" formatter={(v: number) => fTr(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      {/* Hàng 3: Đơn giá theo phân khúc, HS dự kiến vs thực tế, Heatmap Tháng × Thứ */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Panel title="Đơn giá học sinh theo phân khúc" subtitle="Số tour theo khoảng Giá vé mỗi học sinh." code="CH-TOUR-O7" isEmpty={bandData.every((b) => b.n === 0)}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <BarChart data={bandData} margin={{ top: 16, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="name" {...axisProps} />
+              <YAxis {...axisProps} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const g = payload[0]?.payload as Grp;
+                  return <GroupTooltip g={g} tot={bandTot} label={g.name} />;
+                }}
+              />
+              <Bar dataKey="n" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: { name?: string }) => toggle("band", d?.name)}>
+                {bandData.map((r) => (
+                  <Cell key={r.name} fill={OC.tour} fillOpacity={sel.band && sel.band !== r.name ? 0.3 : 1} />
+                ))}
+                <LabelList dataKey="n" position="top" formatter={(v: number) => empty(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel title="HS dự kiến và HS thực tế theo thời gian" subtitle="Tháng chưa có SL TT chỉ hiện cột dự kiến." code="CH-TOUR-O8" isEmpty={planAct.every((r) => r.plan === null)}>
+          <ResponsiveContainer width="100%" height={CHART_H}>
+            <BarChart data={planAct} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="label" {...axisProps} />
+              <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={40} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const r = payload[0]?.payload as (typeof planAct)[number];
+                  const planSum = planAct.reduce((a, x) => a + (x.plan ?? 0), 0);
+                  return (
+                    <TooltipBox label={monthLabel(r.m)}>
+                      <TooltipRow color={OC.hs} name="HS dự kiến" value={r.plan ?? 0} unit="HS" share={planSum ? ((r.plan ?? 0) / planSum) * 100 : undefined} />
+                      {r.k ? (
+                        <TooltipRow color={OC.tour} name="HS thực tế (SL TT)" value={r.act ?? 0} unit="HS" share={r.plan ? ((r.act ?? 0) / r.plan) * 100 : undefined} />
+                      ) : (
+                        <p className="text-muted-foreground">Chưa có SL TT</p>
+                      )}
+                      <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
+                        Tổng dự kiến các tháng: {formatNumber(planSum)} HS{r.k ? `, ${r.k}/${r.n} tour có SL TT` : ""}
+                      </p>
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="plan" name="HS dự kiến" fill={OC.hs} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+                <LabelList dataKey="plan" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
+              </Bar>
+              <Bar dataKey="act" name="HS thực tế (SL TT)" fill={OC.tour} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+                <LabelList dataKey="act" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        <Panel title="Số tour theo Tháng × Thứ" subtitle="Bấm ô, tên tháng hoặc tên thứ để lọc chéo." code="CH-TOUR-O9" isEmpty={heat.ms.length === 0}>
+          <div className="overflow-auto" style={{ maxHeight: CHART_H + 12 }}>
+            <table className="w-full border-separate border-spacing-[3px] text-xs">
+              <thead>
+                <tr>
+                  <th className="sticky top-0 z-10 bg-card py-1 text-left font-semibold text-muted-foreground">Tháng</th>
+                  {WEEKDAYS.map((w, i) => (
+                    <th key={w} className="sticky top-0 z-10 bg-card py-1">
+                      <button type="button" onClick={() => toggle("weekday", i)} className={cn("font-semibold text-muted-foreground hover:text-foreground", sel.weekday === i && "text-primary")}>
+                        {w}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {heat.ms.map((m) => (
+                  <tr key={m}>
+                    <th className="whitespace-nowrap text-left">
+                      <button type="button" onClick={() => toggle("month", m)} className={cn("font-semibold hover:text-primary", sel.month === m && "text-primary")}>
+                        {monthShort(m, refYear)}
+                      </button>
+                    </th>
+                    {(heat.cnt.get(m) as number[]).map((v, i) => {
+                      const on = sel.month === m && sel.weekday === i;
+                      return (
+                        <td key={i} className="p-0">
+                          <button
+                            type="button"
+                            title={`${monthLabel(m)} · ${WEEKDAYS[i]}: ${v} tour`}
+                            onClick={() => {
+                              setSel((s) => (s.month === m && s.weekday === i ? { ...s, month: undefined, weekday: undefined } : { ...s, month: m, weekday: i }));
+                            }}
+                            className={cn("h-8 w-full rounded text-center text-[11px] font-semibold tabular-nums", on && "ring-2 ring-foreground")}
+                            style={{
+                              background: v ? mix(CHART_COLORS.primary, 15 + Math.round((v / heat.max) * 85)) : "transparent",
+                              color: v / heat.max >= 0.6 ? "#fff" : undefined,
+                              opacity: (sel.month && sel.month !== m) || (sel.weekday !== undefined && sel.weekday !== i) ? 0.45 : 1,
+                            }}
+                          >
+                            {v || ""}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* TAB 2 — Lịch tour (heatmap tháng → tuần  ⇄  timeline trong tuần)    */
+/* ================================================================== */
+
+const EMPTY_DAY: DayInfo = { items: [], load: 0, tours: 0, hasOther: false, peak: 0 };
+const HOUR_H = 44;
+const heatPct = (v: number) => (v <= 0 ? 0 : v <= 100 ? 18 : v <= 200 ? 40 : v <= 300 ? 70 : 100);
+
+function TourSchedule({ items, today, active }: { items: TourItem[]; today: string; active: boolean }) {
+  const curMonth = today.slice(0, 7);
+  const dated = useMemo(() => items.filter((r) => r.hasDate && r.date), [items]);
+  const undated = useMemo(() => items.filter((r) => !r.hasDate).sort((a, b) => a.month.localeCompare(b.month)), [items]);
+  /** Toàn bộ khoảng ngày có dữ liệu — mặc định hiển thị đầy đủ các tháng (cuộn dọc trong khung heatmap). */
+  const fullRange = useMemo<DateRange>(() => {
+    const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
+    return ds.length ? { from: ds[0] as string, to: ds[ds.length - 1] as string } : quickRange("fyThis", today);
+  }, [items, today]);
+  const [range, setRange] = useState<DateRange>(fullRange);
+  /** Phạm vi số liệu cho card + chart Số lượt tour theo sale: mặc định toàn bộ thời gian; bấm tháng -> tháng đó; bấm tuần/ngày -> tuần đó. */
+  const [mScope, setMScope] = useState<"all" | "month" | "week">("all");
+  const [mMonth, setMMonth] = useState<string>(curMonth);
+  const heatMonths = useMemo(() => {
+    const all = Array.from(new Set([...dated.map((r) => r.month), curMonth])).sort();
+    const windowed = all.filter((m) => m >= range.from.slice(0, 7) && m <= range.to.slice(0, 7));
+    return windowed.length ? windowed : all;
+  }, [dated, curMonth, range]);
+
+  const [week, setWeek] = useState(mondayOf(today));
+  const [focusDay, setFocusDay] = useState<string | null>(today);
+  const [open, setOpen] = useState<Set<string>>(() => new Set([curMonth]));
+  const [kinds] = useState<Set<TourKind>>(() => new Set<TourKind>(["tour", "guest", "block"]));
+  const [selId, setSelId] = useState<number | null>(null);
+  const [scope, setScope] = useState<"week" | "month" | "all">("all");
+  const [q, setQ] = useState("");
+  const [onlyTT, setOnlyTT] = useState(false);
+
+  const hmScroll = useRef<HTMLDivElement>(null);
+  const hmCard = useRef<HTMLDivElement>(null);
+  const tlCard = useRef<HTMLDivElement>(null);
+
+  /** Tải theo ngày tính sẵn một lần cho mọi ngày có dữ liệu; ngày trống dùng EMPTY_DAY. */
+  const infoByDay = useMemo(() => {
+    const m = new Map<string, DayInfo>();
+    new Set(dated.map((r) => r.date as string)).forEach((d) => m.set(d, dayInfo(dated, d)));
+    return m;
+  }, [dated]);
+  const infoCache = useCallback((d: string): DayInfo => infoByDay.get(d) ?? EMPTY_DAY, [infoByDay]);
+
+  const selectWeek = useCallback((w: string, d: string | null) => {
+    setMScope("week");
+    setWeek(w);
+    setFocusDay(d);
+    setOpen((s) => new Set([...s, w.slice(0, 7), addDays(w, 6).slice(0, 7)]));
+  }, []);
+
+  /* Giữ heatmap cao bằng timeline, và tự cuộn tới tuần đang chọn (không bắt người dùng tự tìm). */
+  useLayoutEffect(() => {
+    if (!active) return;
+    const sc = hmScroll.current;
+    const tl = tlCard.current;
+    const hm = hmCard.current;
+    if (!sc || !tl || !hm) return;
+    const wide = window.matchMedia("(min-width: 1280px)").matches;
+    const other = hm.offsetHeight - sc.offsetHeight;
+    sc.style.maxHeight = wide ? `${Math.max(320, tl.offsetHeight - other)}px` : "420px";
+    const row = sc.querySelector<HTMLElement>(`tr[data-w="${week}"]`);
+    if (row) {
+      const head = sc.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+      const top = row.offsetTop - head - 4;
+      const bottom = row.offsetTop + row.offsetHeight;
+      if (top < sc.scrollTop || bottom > sc.scrollTop + sc.clientHeight) sc.scrollTop = Math.max(0, top - sc.clientHeight / 3);
+    }
+  }, [active, week, open, selId, kinds]);
+
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week]);
+  const weekInfos = useMemo(() => weekDays.map((d) => infoCache(d)), [weekDays, infoCache]);
+
+  const wk = useMemo(() => {
+    const tours = weekInfos.reduce((a, d) => a + d.tours, 0);
+    const hs = weekInfos.reduce((a, d) => a + d.load, 0);
+    let pk = -1;
+    let pi = 0;
+    weekInfos.forEach((d, i) => {
+      if (d.load > pk) {
+        pk = d.load;
+        pi = i;
+      }
+    });
+    const list = dated.filter((r) => r.kind === "tour" && (r.date as string) >= week && (r.date as string) <= addDays(week, 6));
+    return {
+      tours,
+      hs,
+      peak: pk,
+      peakDay: weekDays[pi] as string,
+      noStatus: list.filter((r) => r.status === "Chưa xác định").length,
+      bySale: Object.entries(
+        list.reduce<Record<string, { hs: number; n: number }>>((a, r) => {
+          const k = r.sale ?? "(Chưa có sale)";
+          a[k] = a[k] ?? { hs: 0, n: 0 };
+          (a[k] as { hs: number; n: number }).hs += r.students;
+          (a[k] as { hs: number; n: number }).n += 1;
+          return a;
+        }, {}),
+      ).sort((a, b) => b[1].hs - a[1].hs),
+    };
+  }, [weekInfos, weekDays, dated, week]);
+
+  const undatedInRange = useMemo(() => undated.filter((r) => r.month >= range.from.slice(0, 7) && r.month <= range.to.slice(0, 7)), [undated, range]);
+  const mList = useMemo(() => {
+    let l = dated.filter((r) => r.kind === "tour" && (r.date as string) >= range.from && (r.date as string) <= range.to);
+    if (mScope === "month") l = l.filter((r) => r.month === mMonth);
+    if (mScope === "week") l = l.filter((r) => (r.date as string) >= week && (r.date as string) <= addDays(week, 6));
+    return l;
+  }, [dated, range, mScope, mMonth, week]);
+  const mTot = useMemo(() => totalOf(mList), [mList]);
+  const mAct = useMemo(() => {
+    const w = mList.filter((r) => r.actualStudents !== null);
+    return { n: w.length, act: w.reduce((a, r) => a + (r.actualStudents ?? 0), 0), plan: w.reduce((a, r) => a + r.students, 0) };
+  }, [mList]);
+  const mSales = useMemo(() => Array.from(new Set(mList.filter((r) => r.sale).map((r) => r.sale as string))).sort(), [mList]);
+  const bySale = useMemo(() => groupTours(mList, (r) => r.sale ?? SALE_NONE).sort((a, b) => b.n - a.n), [mList]);
+  const scopeLabel = mScope === "all" ? "toàn bộ thời gian" : mScope === "month" ? monthLabel(mMonth) : `tuần ${dm(week)} – ${dm(addDays(week, 6))}`;
+
+  const sel = selId === null ? null : (items.find((r) => r.id === selId) ?? null);
+
+  const tableRows = useMemo(() => {
+    const we = addDays(week, 6);
+    const refMonth = (focusDay ?? week).slice(0, 7);
+    let l = items.slice();
+    if (scope === "week") l = l.filter((r) => r.date && r.date >= week && r.date <= we);
+    if (scope === "month") l = l.filter((r) => r.date && r.date.slice(0, 7) === refMonth);
+    l = l.filter((r) => kinds.has(r.kind));
+    if (onlyTT) l = l.filter((r) => r.actualStudents !== null);
+    if (q) {
+      const s = q.toLowerCase();
+      l = l.filter((r) => `${r.schoolName} ${r.sale ?? ""}`.toLowerCase().includes(s));
+    }
+    return l.sort((a, b) => (a.date ?? `${a.month}-99`).localeCompare(b.date ?? `${b.month}-99`) || (a.start ?? 0) - (b.start ?? 0));
+  }, [items, week, focusDay, scope, kinds, onlyTT, q]);
+
+  const scopeText = scope === "week" ? `tuần ${dm(week)} – ${dm(addDays(week, 6))}` : scope === "month" ? monthLabel((focusDay ?? week).slice(0, 7)) : "toàn bộ lịch";
+
+  const [a0, a1] = TOUR_RULES.axis;
+  const span = a1 - a0;
+
+  return (
+    <div className="space-y-4">
+      <TourRangeFilter range={range} setRange={setRange} today={today} resetTo={fullRange} onReset={() => setMScope("all")} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <KpiCard label="Doanh thu dự kiến" value={mTot.n ? formatNumber(mTot.dt / 1_000_000, mTot.dt < 100_000_000 ? 1 : 0) : "—"} unit="tr" change={null} />
+        <KpiCard label={mScope === "week" ? "Số tour trong tuần" : mScope === "month" ? "Số tour trong tháng" : "Số tour"} value={formatNumber(mTot.n)} unit="tour" change={null} />
+        <KpiCard label="Số học sinh dự kiến" value={formatNumber(mTot.hs)} unit="HS" change={null} />
+        <KpiCard
+          label="Số học sinh thực tế"
+          value={mAct.n ? formatNumber(mAct.act) : "—"}
+          unit={mAct.n ? "HS" : undefined}
+          change={null}
+          subtitle={mAct.n && mAct.plan ? `Đạt ${formatNumber(Math.round((mAct.act / mAct.plan) * 100))}% so với dự kiến` : "Chưa có SL TT"}
+        />
+        <KpiCard label="Sale phụ trách" value={mSales.length ? mSales.join("\n") : "—"} change={null} valueClassName="whitespace-pre-line text-base leading-snug text-primary" />
+      </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Số liệu các card và chart Số lượt tour theo sale đang theo: <b>{scopeLabel}</b>.{" "}
+        {mScope !== "all" && (
+          <button type="button" className="underline" onClick={() => setMScope("all")}>
+            Xem toàn bộ thời gian
+          </button>
+        )}
+      </p>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(360px,5fr)_minmax(0,8fr)]">
+        {/* ---------------- Heatmap tháng → tuần ---------------- */}
+        <section ref={hmCard} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="text-sm font-semibold">Lịch tour theo Tháng</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Bấm tên tháng để mở các tuần. Bấm một ngày hoặc một tuần để xem lịch bên cạnh.</p>
+          <div className="my-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            {[
+              [18, "1–100 HS"],
+              [40, "101–200"],
+              [70, "201–300"],
+            ].map(([p, l]) => (
+              <span key={l} className="inline-flex items-center gap-1">
+                <i className="inline-block size-3 rounded-sm" style={{ background: mix(CHART_COLORS.primary, p as number) }} />
+                {l}
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1">
+              <i className="inline-block size-3 rounded-sm border-2" style={{ borderColor: WARN }} />
+              Trên {TOUR_RULES.capacityWarn} HS
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <i className="inline-block size-1.5 rounded-full bg-muted-foreground" />
+              Có khách mời hoặc sự kiện
+            </span>
+          </div>
+          <div ref={hmScroll} className="relative overflow-auto border-t border-border">
+            <table className="w-full min-w-[340px] border-separate border-spacing-[3px] text-xs">
+              <thead>
+                <tr>
+                  <th className="sticky top-0 z-10 w-24 bg-card py-1.5 text-left font-semibold text-muted-foreground">Tuần</th>
+                  {WEEKDAYS.map((w) => (
+                    <th key={w} className="sticky top-0 z-10 bg-card py-1.5 font-semibold text-muted-foreground">
+                      {w}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {heatMonths.map((m) => {
+                  const isOpen = open.has(m);
+                  const byWd = [0, 0, 0, 0, 0, 0, 0];
+                  const cnt = [0, 0, 0, 0, 0, 0, 0];
+                  dated.filter((r) => r.month === m && r.kind === "tour").forEach((r) => {
+                    const i = weekdayIdx(r.date as string);
+                    byWd[i] = (byWd[i] ?? 0) + r.students;
+                    cnt[i] = (cnt[i] ?? 0) + 1;
+                  });
+                  const tours = cnt.reduce((a, b) => a + b, 0);
+                  const hs = byWd.reduce((a, b) => a + b, 0);
+                  const toggleMonth = () => {
+                    setMScope("month");
+                    setMMonth(m);
+                    setOpen((s) => {
+                      const n = new Set(s);
+                      if (n.has(m)) n.delete(m);
+                      else {
+                        n.add(m);
+                        if (week.slice(0, 7) !== m && addDays(week, 6).slice(0, 7) !== m) {
+                          const ws = weeksOfMonth(m);
+                          const w = ws.find((x) => dated.some((r) => (r.date as string) >= x && (r.date as string) <= addDays(x, 6))) ?? (ws[0] as string);
+                          setWeek(w);
+                          setFocusDay(null);
+                        }
+                      }
+                      return n;
+                    });
+                  };
+                  return (
+                    <Fragment key={m}>
+                      <tr className="cursor-pointer" onClick={toggleMonth} aria-expanded={isOpen}>
+                        <th className="whitespace-nowrap px-1 py-1.5 text-left font-semibold">
+                          <button type="button" className="text-left" onClick={(e) => { e.stopPropagation(); toggleMonth(); }}>
+                            <span className="inline-block w-3 text-muted-foreground">{isOpen ? "▾" : "▸"}</span> {monthLabel(m)}
+                            <span className="block pl-3 text-[11px] font-normal text-muted-foreground">
+                              {formatNumber(tours)} tour, {formatNumber(hs)} HS
+                            </span>
+                          </button>
+                        </th>
+                        {byWd.map((v, i) => (
+                          <td key={i} className="rounded bg-secondary/60 py-1.5 text-center text-[11px] text-muted-foreground" title={`${WEEKDAYS[i]} trong ${monthLabel(m)}: ${cnt[i]} tour, ${formatNumber(v)} HS`}>
+                            <b className="block text-xs text-foreground">{cnt[i] || "–"}</b>
+                            {cnt[i] ? "tour" : ""}
+                          </td>
+                        ))}
+                      </tr>
+                      {isOpen &&
+                        weeksOfMonth(m).map((w) => {
+                          const isSel = w === week;
+                          return (
+                            <tr key={`${m}-${w}`} data-w={w}>
+                              <th
+                                className={cn(
+                                  "cursor-pointer whitespace-nowrap rounded px-1 text-left text-xs font-normal text-muted-foreground",
+                                  isSel && "bg-primary/10 font-semibold text-secondary-foreground",
+                                )}
+                                onClick={() => selectWeek(w, null)}
+                              >
+                                <button type="button">{dm(w)}–{dm(addDays(w, 6))}</button>
+                              </th>
+                              {Array.from({ length: 7 }, (_, i) => {
+                                const d = addDays(w, i);
+                                const inf = infoCache(d);
+                                const pct = heatPct(inf.load);
+                                const out = d.slice(0, 7) !== m;
+                                const isFocus = isSel && d === focusDay;
+                                return (
+                                  <td
+                                    key={d}
+                                    className={cn(
+                                      "relative h-11 cursor-pointer rounded-md border p-0 text-center align-middle",
+                                      isSel ? "border-primary" : "border-border",
+                                      out && "opacity-40",
+                                    )}
+                                    style={{
+                                      background: pct ? mix(CHART_COLORS.primary, pct) : "transparent",
+                                      color: pct >= 70 ? "#fff" : undefined,
+                                      boxShadow: isFocus ? "inset 0 0 0 2px var(--foreground)" : undefined,
+                                      ...(inf.load > TOUR_RULES.capacityWarn ? { borderColor: WARN, borderWidth: 2 } : {}),
+                                    }}
+                                    title={`${WEEKDAYS[i]} ${dm(d)}: ${inf.tours} tour, ${formatNumber(inf.load)} HS`}
+                                    onClick={() => selectWeek(w, d)}
+                                  >
+                                    <span
+                                      className={cn("absolute left-1 top-0.5 text-[10px]", d === today && "rounded px-1 text-white")}
+                                      style={d === today ? { background: WARN } : { opacity: 0.8 }}
+                                    >
+                                      {Number(d.slice(8))}
+                                    </span>
+                                    <span className="text-[13px] font-semibold tabular-nums">{inf.load ? formatNumber(inf.load) : ""}</span>
+                                    {inf.hasOther && <span className="absolute bottom-1 right-1 size-1.5 rounded-full bg-muted-foreground" />}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ---------------- Timeline 7 ngày của tuần đang chọn ---------------- */}
+        <section ref={tlCard} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Lịch tuần {dm(week)} – {dm(addDays(week, 6))}/{addDays(week, 6).slice(0, 4)}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatNumber(wk.tours)} tour, {formatNumber(wk.hs)} HS. Cạnh phải nét đứt: giờ kết thúc tự suy ra theo rule.
+              </p>
+            </div>
+            <div className="flex gap-1.5">
+              <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs hover:bg-secondary" onClick={() => selectWeek(addDays(week, -7), null)}>
+                <ChevronLeft className="size-3.5" /> Tuần trước
+              </button>
+              <button type="button" className="rounded-md border border-border bg-card px-2.5 py-1 text-xs hover:bg-secondary" onClick={() => selectWeek(mondayOf(today), today)}>
+                Tuần này
+              </button>
+              <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs hover:bg-secondary" onClick={() => selectWeek(addDays(week, 7), null)}>
+                Tuần sau <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_290px]">
+            <div className="min-w-0">
+              {/* Cột = thứ, hàng = giờ */}
+              <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] text-[11px]">
+                <span />
+                {weekDays.map((d, i) => {
+                  const inf = weekInfos[i] as DayInfo;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setFocusDay(d)}
+                      className={cn("border-l border-border px-1 pb-1 text-left leading-tight", d === focusDay && "bg-primary/5")}
+                    >
+                      <b className="text-[12px]">
+                        {WEEKDAYS[i]} {dm(d)}
+                      </b>
+                      {d === today && (
+                        <span className="ml-1 inline-block rounded-full border px-1 text-[9px]" style={{ borderColor: WARN, color: WARN }}>
+                          Nay
+                        </span>
+                      )}
+                      <span className="block text-muted-foreground">{inf.load ? `${formatNumber(inf.load)} HS, ${inf.tours} tour` : "Trống"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] border-t border-border">
+                <div className="relative text-[11px] text-muted-foreground" style={{ height: HOUR_H * span }}>
+                  {Array.from({ length: span + 1 }, (_, i) => (
+                    <span key={i} className="absolute right-1 -translate-y-1/2" style={{ top: i * HOUR_H }}>
+                      {a0 + i}h
+                    </span>
+                  ))}
+                </div>
+                {weekDays.map((d, i) => {
+                  const inf = weekInfos[i] as DayInfo;
+                  const bars = inf.items
+                    .filter((r) => kinds.has(r.kind) && r.start !== null && r.end !== null)
+                    .sort((x, y) => (x.start as number) - (y.start as number) || (y.end as number) - (x.end as number));
+                  const ends: number[] = [];
+                  const lane = new Map<number, number>();
+                  bars.forEach((r) => {
+                    let l = ends.findIndex((e) => e <= (r.start as number) + 1e-6);
+                    if (l < 0) {
+                      l = ends.length;
+                      ends.push(0);
+                    }
+                    ends[l] = r.end as number;
+                    lane.set(r.id, l);
+                  });
+                  const lanes = Math.max(1, ends.length);
+                  return (
+                    <div
+                      key={d}
+                      className={cn("relative border-l border-border", d === focusDay && "bg-primary/5")}
+                      style={{
+                        height: HOUR_H * span,
+                        backgroundImage: "linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
+                        backgroundSize: `100% ${HOUR_H}px`,
+                      }}
+                    >
+                      {bars.map((r) => {
+                        const st = Math.max(r.start as number, a0);
+                        const en = Math.min(r.end as number, a1);
+                        const l = lane.get(r.id) ?? 0;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setSelId(r.id)}
+                            title={`${r.schoolName}\n${hhmm(r.start as number)}–${hhmm(r.end as number)}${r.endAssumed ? " (kết thúc theo rule)" : ""}\n${formatNumber(r.students)} HS${r.sale ? `, sale ${r.sale}` : ""}${r.grade ? `, ${r.grade}` : ""}\n${r.status}`}
+                            className={cn(
+                              "absolute overflow-hidden rounded px-1 py-0.5 text-left text-[10px] leading-tight",
+                              BAR_CLS[r.kind],
+                              selId === r.id && "ring-2 ring-foreground",
+                            )}
+                            style={{
+                              top: (st - a0) * HOUR_H + 1,
+                              height: Math.max(18, (en - st) * HOUR_H - 2),
+                              left: `calc(${(l / lanes) * 100}% + 1px)`,
+                              width: `calc(${100 / lanes}% - 2px)`,
+                              borderBottomStyle: r.endAssumed ? "dashed" : undefined,
+                            }}
+                          >
+                            <b className="block">{r.schoolName}</b>
+                            {formatNumber(r.students)} HS
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Chi tiết tour đang chọn — nằm bên phải lịch tuần */}
+            <aside
+              className="self-start rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
+              style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
+            >
+              {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
+            </aside>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel title="Số lượt tour theo sale" subtitle={`Số liệu theo ${scopeLabel}. Bấm tháng hoặc tuần ở lịch bên trên để xem số của tháng/tuần đó.`} isEmpty={bySale.length === 0}>
+          <div className="grid gap-2">
+            {bySale.map((g) => {
+              const max = Math.max(1, ...bySale.map((x) => x.n));
+              return (
+                <div key={g.name} className="grid grid-cols-[88px_1fr] items-center gap-2 text-xs">
+                  <span className="truncate">{g.name}</span>
+                  <div>
+                    <div className="h-4 rounded-sm" style={{ width: `${(g.n / max) * 100}%`, minWidth: 2, background: CHART_COLORS.primary }} />
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatNumber(g.n)} tour, {formatNumber(g.hs)} HS ({mTot.n ? formatNumber(Math.round((g.n / mTot.n) * 100)) : 0}% / tổng {formatNumber(mTot.n)} tour)
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+        <Panel title="Các tour chưa chốt ngày" subtitle="Tour đã có trong lịch nhưng chưa xác định ngày, chưa hiện được trên lịch." isEmpty={undatedInRange.length === 0}>
+          <div className="max-h-72 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card text-muted-foreground">
+                <tr>
+                  {["Tháng - Năm", "Tên trường", "Sale phụ trách", "Tiến độ", "Số học sinh"].map((h, i) => (
+                    <th key={h} className={cn("whitespace-nowrap border-b border-border px-1.5 py-2 font-medium", i === 4 ? "text-right" : "text-left")}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {undatedInRange.map((r) => (
+                  <tr key={r.id} className="border-b border-border">
+                    <td className="whitespace-nowrap px-1.5 py-1.5">
+                      {r.month.slice(5, 7)} - {r.month.slice(0, 4)}
+                    </td>
+                    <td className="px-1.5 py-1.5 font-medium">{r.schoolName}</td>
+                    <td className="px-1.5 py-1.5">{r.sale ?? ""}</td>
+                    <td className="px-1.5 py-1.5">{r.status}</td>
+                    <td className="px-1.5 py-1.5 text-right tabular-nums">{r.students ? formatNumber(r.students) : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+
+      <section className="rounded-xl border border-border bg-card p-4 shadow-xs">
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Chi tiết tour</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {tableRows.length} dòng, {scopeText}. Bấm một dòng để xem trên lịch.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Phạm vi bảng">
+              {(
+                [
+                  ["week", "Tuần đang chọn"],
+                  ["month", "Cả tháng"],
+                  ["all", "Toàn bộ"],
+                ] as const
+              ).map(([k, l]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={scope === k}
+                  onClick={() => setScope(k)}
+                  className={cn("border-r border-border px-2.5 py-1 text-xs last:border-r-0", scope === k ? "bg-primary text-primary-foreground" : "bg-card hover:bg-secondary")}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input type="checkbox" checked={onlyTT} onChange={(e) => setOnlyTT(e.target.checked)} /> Chỉ tour có SL TT
+            </label>
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tìm trường hoặc sale"
+              aria-label="Tìm trường hoặc sale"
+              className="h-8 rounded-md border border-input bg-card px-2.5 text-xs"
+            />
+          </div>
+        </div>
+        <div className="max-h-[480px] overflow-auto">
+          <table className="w-full min-w-[1040px] text-xs">
+            <thead className="sticky top-0 bg-card text-muted-foreground">
+              <tr>
+                {["Ngày", "Khung giờ", "Trường", "Khối", "Sale", "SL HS", "SL TT", "Chênh", "Giá vé", "DT dự kiến", "Tiến độ", "Lưu ý"].map((h, i) => (
+                  <th key={h} className={cn("whitespace-nowrap border-b border-border px-1.5 py-2 font-medium", i >= 5 && i <= 9 ? "text-right" : "text-left")}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="py-8 text-center text-muted-foreground">
+                    {EMPTY_TEXT}
+                  </td>
+                </tr>
+              ) : (
+                tableRows.map((r) => {
+                  const diff = r.actualStudents !== null ? r.actualStudents - r.students : null;
+                  return (
+                    <tr
+                      key={r.id}
+                      className={cn("border-b border-border align-top hover:bg-secondary/60", r.date && "cursor-pointer", selId === r.id && "bg-primary/10")}
+                      onClick={() => {
+                        if (!r.date) return;
+                        setSelId(r.id);
+                        selectWeek(mondayOf(r.date), r.date);
+                        tlCard.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      }}
+                    >
+                      <td className="whitespace-nowrap px-1.5 py-1.5">
+                        {r.date ? `${WEEKDAYS[weekdayIdx(r.date)]} ${toDMY(r.date)}` : <span style={{ color: WARN }}>Chưa có ngày</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-1.5 py-1.5">{r.start !== null && r.end !== null ? `${hhmm(r.start)}–${hhmm(r.end)}${r.endAssumed ? "*" : ""}` : (r.timeRaw ?? "—")}</td>
+                      <td className="px-1.5 py-1.5">
+                        {r.schoolName}
+                        {r.kind !== "tour" && <span className="ml-1 rounded-full border border-border px-1.5 text-[10px] text-muted-foreground">{KIND_LABEL[r.kind]}</span>}
+                      </td>
+                      <td className="px-1.5 py-1.5">{r.grade ?? ""}</td>
+                      <td className="px-1.5 py-1.5">{r.sale ?? ""}</td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums">
+                        {formatNumber(r.students)}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums">{r.actualStudents !== null ? formatNumber(r.actualStudents) : ""}</td>
+                      <td className={cn("px-1.5 py-1.5 text-right tabular-nums", diff !== null && diff < 0 && "text-destructive")}>
+                        {diff !== null ? `${diff > 0 ? "+" : ""}${formatNumber(diff)}` : ""}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums">{r.price ? fK(r.price) : ""}</td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums">{r.revenue ? formatShort(r.revenue) : ""}</td>
+                      <td className="px-1.5 py-1.5">{r.status}</td>
+                      <td className="min-w-52 px-1.5 py-1.5">
+                        {r.flags
+                          .filter((f) => !f.startsWith("Không có giờ"))
+                          .map((f) => (
+                            <span key={f} className="mb-0.5 mr-1 inline-block rounded-full border px-1.5 text-[10px]" style={{ borderColor: WARN, color: WARN }}>
+                              {f}
+                            </span>
+                          ))}
+                        {(r.note || r.note2) && <span className="block text-[11px] text-muted-foreground">{[r.note, r.note2].filter(Boolean).join(" | ")}</span>}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">* Giờ kết thúc tự suy ra theo rule vì khung giờ gốc không có giờ kết thúc.</p>
+      </section>
+
+      <details className="rounded-xl border border-border bg-card p-4 shadow-xs">
+        <summary className="cursor-pointer text-sm font-semibold">Bảng đầy đủ các cột gốc (xuất CSV)</summary>
+        <div className="mt-3">
+          <FactTable title="Lịch tour B2B, toàn bộ cột" subtitle={`Phạm vi: ${scopeText}. Chọn cột hiển thị và xuất dữ liệu.`} columns={FULL_COLUMNS} rows={tableRows} fileName="b2b-lich-tour-chi-tiet" />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+const BAR_CLS: Record<TourKind, string> = {
+  tour: "border border-primary/60 border-l-[3px] border-l-primary bg-primary/15 text-foreground",
+  guest: "border border-dashed border-[var(--brand-support)] bg-[color-mix(in_oklab,var(--brand-support)_25%,transparent)] text-foreground",
+  block: "border border-border bg-[repeating-linear-gradient(135deg,var(--secondary)_0_6px,var(--border)_6px_8px)] text-muted-foreground",
+};
+
+function F({ k, v, hot }: { k: string; v: ReactNode; hot?: boolean }) {
+  return (
+    <div>
+      <dt className="text-[11px] text-muted-foreground">{k}</dt>
+      <dd className={cn("font-semibold", hot && "inline-block rounded bg-card/80 px-1.5 py-0.5 text-[13px] text-[var(--brand-dark)] shadow-xs")}>{v}</dd>
+    </div>
+  );
+}
+
+function TourDetail({ r }: { r: TourItem }) {
+  const diff = r.actualStudents !== null ? r.actualStudents - r.students : null;
+  return (
+    <div>
+      <b className="mb-2 block text-base leading-snug text-[var(--brand-dark)]">{r.schoolName}</b>
+      <dl className="grid grid-cols-1 gap-y-2 text-xs">
+        <F
+          k="Ngày, giờ"
+          v={`${r.date ? `${WEEKDAYS[weekdayIdx(r.date)]} ${dm(r.date)}/${r.date.slice(0, 4)}` : "Chưa có ngày"}, ${r.start !== null && r.end !== null ? `${hhmm(r.start)}–${hhmm(r.end)}` : (r.timeRaw ?? "—")}${r.endAssumed ? " (kết thúc theo rule)" : ""}`}
+        />
+        <F k="Doanh thu dự kiến" v={r.revenue ? fTr(r.revenue) : "—"} hot />
+        <F k="Sale" v={r.sale ?? "—"} hot />
+        <F k="Tiến độ" v={r.status} hot />
+        <F k="Giá vé" v={r.price ? fK(r.price) : "—"} />
+        <F k="Khối lớp" v={r.grade ?? "—"} />
+        <F k="SL HS dự kiến" v={formatNumber(r.students)} />
+        <F k="SL TT" v={r.actualStudents !== null ? `${formatNumber(r.actualStudents)}${diff !== null ? ` (${diff > 0 ? "+" : ""}${formatNumber(diff)})` : ""}` : "—"} />
+        <F k="Khu vực" v={r.region ?? "—"} />
+      </dl>
+      {(r.note || r.note2) && <p className="mt-2 text-xs text-muted-foreground">Ghi chú: {[r.note, r.note2].filter(Boolean).join(" | ")}</p>}
+      {r.flags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {r.flags.map((f) => (
+            <span key={f} className="inline-flex items-center gap-1 rounded-full border px-1.5 text-[10px]" style={{ borderColor: WARN, color: WARN }}>
+              <AlertTriangle className="size-3" /> {f}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FULL_COLUMNS: Column<TourItem>[] = [
+  { key: "month", header: "Tháng", render: (r) => bucketLabel(r.month, "month") },
+  { key: "date", header: "Ngày tham quan", render: (r) => (r.date ? toDMY(r.date) : "Chưa xác định ngày") },
+  { key: "kind", header: "Loại dòng", render: (r) => KIND_LABEL[r.kind] },
+  { key: "timeRaw", header: "Khung giờ", render: (r) => r.timeRaw ?? "—" },
+  { key: "students", header: "SL HS", render: (r) => formatNumber(r.students), align: "right" },
+  { key: "actualStudents", header: "SL TT", render: (r) => (r.actualStudents !== null ? formatNumber(r.actualStudents) : "—"), align: "right" },
+  { key: "grade", header: "Khối lớp", render: (r) => r.grade ?? "—" },
+  { key: "anTrua", header: "Ăn trưa", render: (r) => r.anTrua ?? "—" },
+  { key: "xe", header: "Xe", render: (r) => r.xe ?? "—" },
+  { key: "note", header: "Note", render: (r) => r.note ?? "—" },
+  { key: "soLuongGV", header: "Số lượng GV", render: (r) => (r.soLuongGV !== null ? formatNumber(r.soLuongGV) : "—"), align: "right" },
+  { key: "nguoiPhuTrach", header: "Người phụ trách", render: (r) => r.nguoiPhuTrach ?? "—" },
+  { key: "thongTinLienHe", header: "Thông tin liên hệ", render: (r) => r.thongTinLienHe ?? "—" },
+  { key: "schoolName", header: "Tên trường", render: (r) => r.schoolName, noTruncate: true },
+  { key: "region", header: "Khu vực", render: (r) => r.region ?? "—" },
+  { key: "sale", header: "Sale", render: (r) => r.sale ?? "—" },
+  { key: "yeuCauYTe", header: "Yêu cầu y tế", render: (r) => r.yeuCauYTe ?? "—" },
+  { key: "duocSuDungHinhAnh", header: "Được sử dụng hình ảnh", render: (r) => r.duocSuDungHinhAnh ?? "—" },
+  { key: "status", header: "Tiến độ", render: (r) => r.status },
+  { key: "price", header: "Giá vé (đ)", render: (r) => formatNumber(r.price), align: "right" },
+  { key: "revenue", header: "Doanh thu dự kiến (đ)", render: (r) => formatNumber(r.revenue), align: "right" },
+  { key: "note2", header: "Note 2", render: (r) => r.note2 ?? "—" },
+  { key: "flags", header: "Lưu ý dữ liệu", render: (r) => r.flags.join("; ") },
+];
