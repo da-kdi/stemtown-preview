@@ -227,7 +227,7 @@ const fqRange = (fy: number, q: 1 | 2 | 3 | 4): DateRange => {
 };
 const monthEnd = (m: string) => addDays(`${addMonths(m, 1)}-01`, -1);
 
-export type QuickRangeKey = "fyThis" | "fyPrev" | "monthThis" | "monthPrev" | "fqThis" | "fqPrev";
+export type QuickRangeKey = "fyThis" | "fyPrev" | "monthThis" | "monthPrev" | "fqThis" | "fqPrev" | "toDate";
 export const QUICK_RANGES: { key: QuickRangeKey; label: string }[] = [
   { key: "fyThis", label: "Năm TC này" },
   { key: "fyPrev", label: "Năm TC trước" },
@@ -235,6 +235,7 @@ export const QUICK_RANGES: { key: QuickRangeKey; label: string }[] = [
   { key: "monthPrev", label: "Tháng trước" },
   { key: "fqThis", label: "Quý TC này" },
   { key: "fqPrev", label: "Quý TC trước" },
+  { key: "toDate", label: "Lũy kế đến nay" },
 ];
 
 /** "Năm tài chính" (TC) tính từ 1/7 năm nay đến 30/6 năm sau. */
@@ -247,6 +248,7 @@ export function quickRange(key: QuickRangeKey, today: string): DateRange {
   }
   if (key === "fyThis") return fyRange(fiscalYearStart(today));
   if (key === "fyPrev") return fyRange(fiscalYearStart(today) - 1);
+  if (key === "toDate") return { from: fyRange(fiscalYearStart(today)).from, to: today };
   const { fy, q } = fiscalQuarterOf(today);
   if (key === "fqThis") return fqRange(fy, q);
   // fqPrev

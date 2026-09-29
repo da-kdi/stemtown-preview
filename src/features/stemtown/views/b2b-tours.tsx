@@ -164,6 +164,7 @@ function TourRangeFilter({
   onReset?: () => void;
   extra?: ReactNode;
 }) {
+  const allActive = range.from === resetTo.from && range.to === resetTo.to;
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-xs">
       <label className="grid gap-1 text-xs text-muted-foreground">
@@ -177,6 +178,16 @@ function TourRangeFilter({
       <div className="flex flex-col gap-1">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Lọc nhanh</span>
         <div className="flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => setRange(resetTo)}
+            className={cn(
+              "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+              allActive ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            Toàn bộ thời gian
+          </button>
           {QUICK_RANGES.map((r) => {
             const rr = quickRange(r.key, today);
             const active = range.from === rr.from && range.to === rr.to;
@@ -277,7 +288,10 @@ const CHART_H = 250;
 
 function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const refYear = today.slice(0, 4);
-  const defaultRange = useMemo(() => quickRange("fyThis", today), [today]);
+  const defaultRange = useMemo<DateRange>(() => {
+    const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
+    return ds.length ? { from: ds[0] as string, to: ds[ds.length - 1] as string } : quickRange("fyThis", today);
+  }, [items, today]);
   const [range, setRange] = useState<DateRange>(defaultRange);
   const [statuses, setStatuses] = useState<Set<string>>(() => new Set());
   const [sel, setSel] = useState<OvSel>({});
@@ -692,6 +706,15 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
 const EMPTY_DAY: DayInfo = { items: [], load: 0, tours: 0, hasOther: false, peak: 0 };
 const HOUR_H = 44;
 const heatPct = (v: number) => (v <= 0 ? 0 : v <= 100 ? 18 : v <= 200 ? 40 : v <= 300 ? 70 : 100);
+type HeatMetric = "dt" | "tour" | "hs";
+const HEAT_METRICS: { key: HeatMetric; label: string }[] = [
+  { key: "dt", label: "Doanh thu" },
+  { key: "tour", label: "Số tour" },
+  { key: "hs", label: "Số học sinh" },
+];
+const dayMetricValue = (inf: DayInfo, metric: HeatMetric): number =>
+  metric === "hs" ? inf.load : metric === "tour" ? inf.tours : inf.items.filter((r) => r.kind === "tour").reduce((a, r) => a + r.revenue, 0);
+const fmtMetric = (v: number, metric: HeatMetric): string => (metric === "dt" ? (v ? fTr(v) : "") : v ? formatNumber(v) : "");
 
 function TourSchedule({ items, today, active }: { items: TourItem[]; today: string; active: boolean }) {
   const curMonth = today.slice(0, 7);
@@ -717,7 +740,9 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
   const [open, setOpen] = useState<Set<string>>(() => new Set([curMonth]));
   const [kinds] = useState<Set<TourKind>>(() => new Set<TourKind>(["tour", "guest", "block"]));
   const [selId, setSelId] = useState<number | null>(null);
+  const [detailOpen, setDetailOpen] = useState(true);
   const [scope, setScope] = useState<"week" | "month" | "all">("all");
+  const [hmMetric, setHmMetric] = useState<HeatMetric>("hs");
   const [q, setQ] = useState("");
   const [onlyTT, setOnlyTT] = useState(false);
 
@@ -732,6 +757,17 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
     return m;
   }, [dated]);
   const infoCache = useCallback((d: string): DayInfo => infoByDay.get(d) ?? EMPTY_DAY, [infoByDay]);
+  const dayMetricMax = useMemo(() => {
+    let max = 1;
+    infoByDay.forEach((inf) => {
+      max = Math.max(max, dayMetricValue(inf, hmMetric));
+    });
+    return max;
+  }, [infoByDay, hmMetric]);
+  const metricPct = useCallback(
+    (v: number) => (hmMetric === "hs" ? heatPct(v) : v <= 0 ? 0 : Math.min(100, Math.round((v / dayMetricMax) * 100))),
+    [hmMetric, dayMetricMax],
+  );
 
   const selectWeek = useCallback((w: string, d: string | null) => {
     setMScope("week");
@@ -806,6 +842,19 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
   }, [mList]);
   const mSales = useMemo(() => Array.from(new Set(mList.filter((r) => r.sale).map((r) => r.sale as string))).sort(), [mList]);
   const bySale = useMemo(() => groupTours(mList, (r) => r.sale ?? SALE_NONE).sort((a, b) => b.n - a.n), [mList]);
+  const bySaleTop = useMemo(() => {
+    const top = bySale.slice(0, 7);
+    const rest = bySale.slice(7);
+    if (!rest.length) return top;
+    const restRow: Grp & { members?: Grp[] } = {
+      name: "Các sales còn lại",
+      n: rest.reduce((a, g) => a + g.n, 0),
+      hs: rest.reduce((a, g) => a + g.hs, 0),
+      dt: rest.reduce((a, g) => a + g.dt, 0),
+      members: rest,
+    };
+    return [...top, restRow];
+  }, [bySale]);
   const scopeLabel = mScope === "all" ? "toàn bộ thời gian" : mScope === "month" ? monthLabel(mMonth) : `tuần ${dm(week)} – ${dm(addDays(week, 6))}`;
 
   const sel = selId === null ? null : (items.find((r) => r.id === selId) ?? null);
@@ -844,7 +893,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
           change={null}
           subtitle={mAct.n && mAct.plan ? `Đạt ${formatNumber(Math.round((mAct.act / mAct.plan) * 100))}% so với dự kiến` : "Chưa có SL TT"}
         />
-        <KpiCard label="Sale phụ trách" value={mSales.length ? mSales.join("\n") : "—"} change={null} valueClassName="whitespace-pre-line text-base leading-snug text-primary" />
+        <KpiCard label="Số Sale phụ trách" value={formatNumber(mSales.length)} unit="sale" change={null} />
       </div>
       <p className="-mt-2 text-xs text-muted-foreground">
         Số liệu các card và chart Số lượt tour theo sale đang theo: <b>{scopeLabel}</b>.{" "}
@@ -860,25 +909,34 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
         <section ref={hmCard} className="rounded-xl border border-border bg-card p-4 shadow-xs">
           <h2 className="text-sm font-semibold">Lịch tour theo Tháng</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">Bấm tên tháng để mở các tuần. Bấm một ngày hoặc một tuần để xem lịch bên cạnh.</p>
-          <div className="my-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            {[
-              [18, "1–100 HS"],
-              [40, "101–200"],
-              [70, "201–300"],
-            ].map(([p, l]) => (
-              <span key={l} className="inline-flex items-center gap-1">
-                <i className="inline-block size-3 rounded-sm" style={{ background: mix(CHART_COLORS.primary, p as number) }} />
-                {l}
+          <div className="my-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+              {HEAT_METRICS.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setHmMetric(m.key)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    hmMetric === m.key ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60",
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+              {[18, 40, 70, 100].map((p) => (
+                <span key={p} className="inline-flex items-center gap-1">
+                  <i className="inline-block size-3 rounded-sm" style={{ background: mix(CHART_COLORS.primary, p) }} />
+                  {p === 18 ? "Thấp" : p === 100 ? "Cao" : ""}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1">
+                <i className="inline-block size-3 rounded-sm border-2" style={{ borderColor: WARN }} />
+                Trên {TOUR_RULES.capacityWarn} HS
               </span>
-            ))}
-            <span className="inline-flex items-center gap-1">
-              <i className="inline-block size-3 rounded-sm border-2" style={{ borderColor: WARN }} />
-              Trên {TOUR_RULES.capacityWarn} HS
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <i className="inline-block size-1.5 rounded-full bg-muted-foreground" />
-              Có khách mời hoặc sự kiện
-            </span>
+            </div>
           </div>
           <div ref={hmScroll} className="relative overflow-auto border-t border-border">
             <table className="w-full min-w-[340px] border-separate border-spacing-[3px] text-xs">
@@ -895,15 +953,20 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
               <tbody>
                 {heatMonths.map((m) => {
                   const isOpen = open.has(m);
-                  const byWd = [0, 0, 0, 0, 0, 0, 0];
-                  const cnt = [0, 0, 0, 0, 0, 0, 0];
+                  const byHs = [0, 0, 0, 0, 0, 0, 0];
+                  const byTour = [0, 0, 0, 0, 0, 0, 0];
+                  const byDt = [0, 0, 0, 0, 0, 0, 0];
                   dated.filter((r) => r.month === m && r.kind === "tour").forEach((r) => {
                     const i = weekdayIdx(r.date as string);
-                    byWd[i] = (byWd[i] ?? 0) + r.students;
-                    cnt[i] = (cnt[i] ?? 0) + 1;
+                    byHs[i] = (byHs[i] ?? 0) + r.students;
+                    byTour[i] = (byTour[i] ?? 0) + 1;
+                    byDt[i] = (byDt[i] ?? 0) + r.revenue;
                   });
-                  const tours = cnt.reduce((a, b) => a + b, 0);
-                  const hs = byWd.reduce((a, b) => a + b, 0);
+                  const byMetric = hmMetric === "hs" ? byHs : hmMetric === "tour" ? byTour : byDt;
+                  const monthMax = Math.max(1, ...byMetric);
+                  const tours = byTour.reduce((a, b) => a + b, 0);
+                  const hs = byHs.reduce((a, b) => a + b, 0);
+                  const dtSum = byDt.reduce((a, b) => a + b, 0);
                   const toggleMonth = () => {
                     setMScope("month");
                     setMMonth(m);
@@ -929,14 +992,18 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                           <button type="button" className="text-left" onClick={(e) => { e.stopPropagation(); toggleMonth(); }}>
                             <span className="inline-block w-3 text-muted-foreground">{isOpen ? "▾" : "▸"}</span> {monthLabel(m)}
                             <span className="block pl-3 text-[11px] font-normal text-muted-foreground">
-                              {formatNumber(tours)} tour, {formatNumber(hs)} HS
+                              {formatNumber(tours)} tour, {formatNumber(hs)} HS, {fTr(dtSum)}
                             </span>
                           </button>
                         </th>
-                        {byWd.map((v, i) => (
-                          <td key={i} className="rounded bg-secondary/60 py-1.5 text-center text-[11px] text-muted-foreground" title={`${WEEKDAYS[i]} trong ${monthLabel(m)}: ${cnt[i]} tour, ${formatNumber(v)} HS`}>
-                            <b className="block text-xs text-foreground">{cnt[i] || "–"}</b>
-                            {cnt[i] ? "tour" : ""}
+                        {byMetric.map((v, i) => (
+                          <td
+                            key={i}
+                            className="rounded py-1.5 text-center text-[11px]"
+                            style={{ background: v ? mix(CHART_COLORS.primary, 15 + Math.round((v / monthMax) * 85)) : "var(--secondary)", color: v / monthMax >= 0.6 ? "#fff" : undefined }}
+                            title={`${WEEKDAYS[i]} trong ${monthLabel(m)}: ${byTour[i]} tour, ${formatNumber(byHs[i] ?? 0)} HS, ${fTr(byDt[i] ?? 0)}`}
+                          >
+                            <b className="block text-xs">{fmtMetric(v, hmMetric) || "–"}</b>
                           </td>
                         ))}
                       </tr>
@@ -957,7 +1024,8 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                               {Array.from({ length: 7 }, (_, i) => {
                                 const d = addDays(w, i);
                                 const inf = infoCache(d);
-                                const pct = heatPct(inf.load);
+                                const v = dayMetricValue(inf, hmMetric);
+                                const pct = metricPct(v);
                                 const out = d.slice(0, 7) !== m;
                                 const isFocus = isSel && d === focusDay;
                                 return (
@@ -983,8 +1051,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                     >
                                       {Number(d.slice(8))}
                                     </span>
-                                    <span className="text-[13px] font-semibold tabular-nums">{inf.load ? formatNumber(inf.load) : ""}</span>
-                                    {inf.hasOther && <span className="absolute bottom-1 right-1 size-1.5 rounded-full bg-muted-foreground" />}
+                                    <span className="text-[13px] font-semibold tabular-nums">{fmtMetric(v, hmMetric)}</span>
                                   </td>
                                 );
                               })}
@@ -1023,7 +1090,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_200px]">
             <div className="min-w-0">
               {/* Cột = thứ, hàng = giờ */}
               <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] text-[11px]">
@@ -1050,10 +1117,17 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                   );
                 })}
               </div>
-              <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] border-t border-border">
+              <div className="relative grid grid-cols-[40px_repeat(7,minmax(0,1fr))] border-t border-border">
+                {a0 < 12 && a1 > 12 && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-dashed"
+                    style={{ top: (12 - a0) * HOUR_H, left: 40, right: 0, borderColor: "var(--brand-accent)" }}
+                    title="12:00 — ranh giới Sáng/Chiều"
+                  />
+                )}
                 <div className="relative text-[11px] text-muted-foreground" style={{ height: HOUR_H * span }}>
                   {Array.from({ length: span + 1 }, (_, i) => (
-                    <span key={i} className="absolute right-1 -translate-y-1/2" style={{ top: i * HOUR_H }}>
+                    <span key={i} className={cn("absolute right-1 -translate-y-1/2", a0 + i === 12 && "font-bold text-[var(--brand-accent)]")} style={{ top: i * HOUR_H }}>
                       {a0 + i}h
                     </span>
                   ))}
@@ -1093,7 +1167,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                           <button
                             key={r.id}
                             type="button"
-                            onClick={() => setSelId(r.id)}
+                            onClick={() => setSelId((cur) => (cur === r.id ? null : r.id))}
                             title={`${r.schoolName}\n${hhmm(r.start as number)}–${hhmm(r.end as number)}${r.endAssumed ? " (kết thúc theo rule)" : ""}\n${formatNumber(r.students)} HS${r.sale ? `, sale ${r.sale}` : ""}${r.grade ? `, ${r.grade}` : ""}\n${r.status}`}
                             className={cn(
                               "absolute overflow-hidden rounded px-1 py-0.5 text-left text-[10px] leading-tight",
@@ -1119,35 +1193,71 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
               </div>
             </div>
 
-            {/* Chi tiết tour đang chọn — nằm bên phải lịch tuần */}
-            <aside
-              className="self-start rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
-              style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
-            >
-              {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
-            </aside>
+            {/* Chi tiết tour đang chọn — nằm bên phải lịch tuần, có thể ẩn/hiện */}
+            <div className="self-start">
+              <button
+                type="button"
+                onClick={() => setDetailOpen((v) => !v)}
+                className="mb-1 inline-flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+              >
+                Chi tiết tour
+                <span className="text-muted-foreground">{detailOpen ? "Ẩn ▾" : "Hiện ▸"}</span>
+              </button>
+              {detailOpen && (
+                <aside
+                  className="break-words rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
+                  style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
+                >
+                  {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
+                </aside>
+              )}
+            </div>
           </div>
         </section>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Số lượt tour theo sale" subtitle={`Số liệu theo ${scopeLabel}. Bấm tháng hoặc tuần ở lịch bên trên để xem số của tháng/tuần đó.`} isEmpty={bySale.length === 0}>
-          <div className="grid gap-2">
-            {bySale.map((g) => {
-              const max = Math.max(1, ...bySale.map((x) => x.n));
-              return (
-                <div key={g.name} className="grid grid-cols-[88px_1fr] items-center gap-2 text-xs">
-                  <span className="truncate">{g.name}</span>
-                  <div>
-                    <div className="h-4 rounded-sm" style={{ width: `${(g.n / max) * 100}%`, minWidth: 2, background: CHART_COLORS.primary }} />
-                    <span className="text-[11px] text-muted-foreground">
-                      {formatNumber(g.n)} tour, {formatNumber(g.hs)} HS ({mTot.n ? formatNumber(Math.round((g.n / mTot.n) * 100)) : 0}% / tổng {formatNumber(mTot.n)} tour)
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        <Panel title="Số lượt tour theo sale" subtitle={`Số liệu theo ${scopeLabel}. Bấm tháng hoặc tuần ở lịch bên trên để xem số của tháng/tuần đó.`} isEmpty={bySaleTop.length === 0}>
+          <ResponsiveContainer width="100%" height={Math.max(220, bySaleTop.length * 34 + 40)}>
+            <BarChart data={bySaleTop} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" {...axisProps} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={100} tick={YCategoryTick} />
+              <Tooltip
+                cursor={{ fill: "var(--secondary)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const g = payload[0]?.payload as Grp & { members?: Grp[] };
+                  return (
+                    <TooltipBox label={g.name}>
+                      <TooltipRow color={OC.tour} name="Số lượt tour" value={g.n} unit="tour" share={mTot.n ? (g.n / mTot.n) * 100 : undefined} />
+                      <TooltipRow color={OC.hs} name="Số học sinh" value={g.hs} unit="HS" share={mTot.hs ? (g.hs / mTot.hs) * 100 : undefined} />
+                      <TooltipRow color={OC.dt} name="Doanh thu dự kiến" value={g.dt} share={mTot.dt ? (g.dt / mTot.dt) * 100 : undefined} />
+                      {g.members && g.members.length > 0 && (
+                        <div className="mt-1.5 border-t border-dashed border-border pt-1.5">
+                          <p className="mb-1 text-muted-foreground">Chi tiết {g.members.length} sale còn lại:</p>
+                          {g.members.map((m) => (
+                            <p key={m.name} className="flex justify-between gap-3">
+                              <span>{m.name}</span>
+                              <span className="tabular-nums">
+                                {formatNumber(m.n)} tour ({g.n ? formatNumber(Math.round((m.n / g.n) * 100)) : 0}%)
+                              </span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </TooltipBox>
+                  );
+                }}
+              />
+              <Bar dataKey="n" fill={OC.tour} radius={[0, 4, 4, 0]}>
+                {bySaleTop.map((g) => (
+                  <Cell key={g.name} fill={g.name === "Các sales còn lại" ? CHART_COLORS.axis : OC.tour} />
+                ))}
+                <LabelList dataKey="n" position="right" formatter={(v: number) => formatNumber(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </Panel>
         <Panel title="Các tour chưa chốt ngày" subtitle="Tour đã có trong lịch nhưng chưa xác định ngày, chưa hiện được trên lịch." isEmpty={undatedInRange.length === 0}>
           <div className="max-h-72 overflow-auto">
