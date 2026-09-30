@@ -316,7 +316,6 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const [statuses, setStatuses] = useState<Set<RecStatus>>(() => new Set());
   const [sel, setSel] = useState<OvSel>({});
   const [timeMetric, setTimeMetric] = useState<TimeMetric>("dt");
-  const [dimMetric, setDimMetric] = useState<DimMetric>("sale");
   const toggle = <K extends keyof OvSel>(k: K, v: OvSel[K]) => setSel((s) => (s[k] === v ? { ...s, [k]: undefined } : { ...s, [k]: v }));
 
   const base = useMemo(
@@ -327,7 +326,6 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     [items, range, statuses],
   );
 
-  const dimFn = DIM_CFG[dimMetric].keyFn;
   const rowsExcept = useCallback(
     (...skip: (keyof OvSel)[]) =>
       base.filter(
@@ -337,7 +335,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           (skip.includes("dimVal") || !sel.dimKey || DIM_CFG[sel.dimKey].keyFn(r) === sel.dimVal) &&
           (skip.includes("rec") || !sel.rec || reconcileStatus(r) === sel.rec),
       ),
-    [base, sel, dimMetric, dimFn],
+    [base, sel],
   );
 
   const rows = useMemo(() => rowsExcept(), [rowsExcept]);
@@ -360,15 +358,27 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   }, [rowsExcept, monthKeys, refYear]);
   const timeTot = useMemo(() => timeData.reduce((a, r) => ({ dt: a.dt + r.dt, n: a.n + r.n, hs: a.hs + r.hs }), { dt: 0, n: 0, hs: 0 }), [timeData]);
 
-  /** 1 chart cơ cấu cho cả 4 chiều (Sales/Cấp học/Phân khúc giá/Trường) — toggle đổi chiều phân rã. */
-  const dimData = useMemo(() => {
-    const cfg = DIM_CFG[dimMetric];
-    const g = groupTours(rowsExcept("dimVal"), cfg.keyFn);
-    let list = cfg.order ? cfg.order.map((k) => g.find((x) => x.name === k) ?? { name: k, n: 0, hs: 0, dt: 0 }) : [...g].sort((a, b) => b.n - a.n);
-    if (cfg.top) list = list.slice(0, cfg.top);
-    return list;
-  }, [rowsExcept, dimMetric]);
-  const dimTot = useMemo(() => totalOf(rowsExcept("dimVal").filter((r) => dimFn(r) !== null)), [rowsExcept, dimFn]);
+  /** 4 chart cơ cấu RIÊNG BIỆT — Sales/Cấp học/Phân khúc giá/Trường là 4 trường dữ liệu khác nhau,
+   *  không phải các mức của cùng 1 phân cấp, nên không gộp chung 1 toggle mà tách rõ 4 chart. */
+  const dimRows = rowsExcept("dimVal");
+  const dimDataByKey = useMemo(() => {
+    const out = {} as Record<DimMetric, Grp[]>;
+    (Object.keys(DIM_CFG) as DimMetric[]).forEach((k) => {
+      const cfg = DIM_CFG[k];
+      const g = groupTours(dimRows, cfg.keyFn);
+      let list = cfg.order ? cfg.order.map((name) => g.find((x) => x.name === name) ?? { name, n: 0, hs: 0, dt: 0 }) : [...g].sort((a, b) => b.n - a.n);
+      if (cfg.top) list = list.slice(0, cfg.top);
+      out[k] = list;
+    });
+    return out;
+  }, [dimRows]);
+  const dimTotByKey = useMemo(() => {
+    const out = {} as Record<DimMetric, Tot>;
+    (Object.keys(DIM_CFG) as DimMetric[]).forEach((k) => {
+      out[k] = totalOf(dimRows.filter((r) => DIM_CFG[k].keyFn(r) !== null));
+    });
+    return out;
+  }, [dimRows]);
 
   const planAct = useMemo(() => {
     const rs = rowsExcept("month", "weekday");
@@ -591,42 +601,38 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
         </Panel>
       </div>
 
-      {/* Hàng 2: Cơ cấu số tour — toggle 4 chiều phân rã */}
-      <Panel title={`Số tour dự kiến theo ${DIM_CFG[dimMetric].label}`} code="CH-TOUR-O3" isEmpty={dimData.every((d) => d.n === 0)}>
-        <div className="mb-2 inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-          {(Object.keys(DIM_CFG) as DimMetric[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setDimMetric(k)}
-              className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", dimMetric === k ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60")}
-            >
-              {DIM_CFG[k].label}
-            </button>
-          ))}
-        </div>
-        <ResponsiveContainer width="100%" height={Math.max(220, dimData.length * 34 + 30)}>
-          <BarChart data={dimData} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
-            <XAxis type="number" {...axisProps} allowDecimals={false} />
-            <YAxis type="category" dataKey="name" {...axisProps} width={110} tick={YCategoryTick} />
-            <Tooltip
-              cursor={{ fill: "var(--secondary)" }}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const g = payload[0]?.payload as Grp;
-                return <GroupTooltip g={g} tot={dimTot} label={g.name} />;
-              }}
-            />
-            <Bar dataKey="n" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: { name?: string }) => { toggle("dimVal", d?.name); setSel((s) => ({ ...s, dimKey: dimMetric })); }}>
-              {dimData.map((r) => (
-                <Cell key={r.name} fill={OC.tour} fillOpacity={sel.dimKey === dimMetric && sel.dimVal && sel.dimVal !== r.name ? 0.3 : 1} />
-              ))}
-              <LabelList dataKey="n" position="right" formatter={(v: number) => empty(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </Panel>
+      {/* Hàng 2: Cơ cấu số tour — 4 chart riêng theo 4 trường khác nhau (không gộp vì không cùng phân cấp) */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        {(Object.keys(DIM_CFG) as DimMetric[]).map((k) => {
+          const data = dimDataByKey[k];
+          const tot2 = dimTotByKey[k];
+          return (
+            <Panel key={k} title={`Số tour dự kiến theo ${DIM_CFG[k].label}`} code={`CH-TOUR-O3-${k}`} isEmpty={data.every((d) => d.n === 0)}>
+              <ResponsiveContainer width="100%" height={Math.max(180, data.length * 32 + 24)}>
+                <BarChart data={data} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+                  <XAxis type="number" {...axisProps} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" {...axisProps} width={110} tick={YCategoryTick} />
+                  <Tooltip
+                    cursor={{ fill: "var(--secondary)" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const g = payload[0]?.payload as Grp;
+                      return <GroupTooltip g={g} tot={tot2} label={g.name} />;
+                    }}
+                  />
+                  <Bar dataKey="n" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: { name?: string }) => { toggle("dimVal", d?.name); setSel((s) => ({ ...s, dimKey: k })); }}>
+                    {data.map((r) => (
+                      <Cell key={r.name} fill={OC.tour} fillOpacity={sel.dimKey === k && sel.dimVal && sel.dimVal !== r.name ? 0.3 : 1} />
+                    ))}
+                    <LabelList dataKey="n" position="right" formatter={(v: number) => empty(v)} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+          );
+        })}
+      </div>
 
       {/* Hàng 3: HS dự kiến vs thực tế + Heatmap Tháng × Thứ */}
       <div className="grid gap-4 xl:grid-cols-2">
