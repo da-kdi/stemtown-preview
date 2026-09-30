@@ -351,6 +351,10 @@ export type TourRow = {
   price: number;
   revenue: number;
   note2: string | null;
+  /** Cột "BienBanID" — mã biên bản nghiệm thu B2B khớp với tour này (map thủ công/tự động, có thể để trống nếu chưa nghiệm thu hoặc chưa khớp được). */
+  bienBanId: string | null;
+  /** Cột "TenKhachHang" — tên khách hàng theo biên bản nghiệm thu tương ứng. */
+  tenKhachHang: string | null;
 };
 
 function buoiOf(raw: unknown): TourRow["buoi"] {
@@ -401,6 +405,8 @@ export const TOUR_COLUMNS = [
   "Giá vé",
   "Doanh thu dự kiến",
   "Note 2",
+  "BienBanID",
+  "TenKhachHang",
 ] as const;
 
 /** "2026-10" từ cột Tháng (đã chuẩn hoá "yyyy-MM" khi export, hoặc "10/2026"/"Tháng 10/2026" khi user tự nhập). */
@@ -478,6 +484,8 @@ export function mapTours(raw: Record<string, unknown>[]): TourRow[] {
       price: toNum(r["Giá vé"]),
       revenue: toNum(r["Doanh thu dự kiến"]),
       note2: toStr(r["Note 2"]),
+      bienBanId: toStr(r["BienBanID"]),
+      tenKhachHang: toStr(r["TenKhachHang"]),
     }));
 }
 

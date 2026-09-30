@@ -1445,6 +1445,7 @@ function TourDetail({ r }: { r: TourItem }) {
         <F k="SL HS dự kiến" v={formatNumber(r.students)} />
         <F k="SL TT" v={r.actualStudents !== null ? `${formatNumber(r.actualStudents)}${diff !== null ? ` (${diff > 0 ? "+" : ""}${formatNumber(diff)})` : ""}` : "—"} />
         <F k="Khu vực" v={r.region ?? "—"} />
+        <F k="Nghiệm thu" v={r.bienBanId ? `Đã nghiệm thu (${r.bienBanId})` : "Chưa nghiệm thu"} />
       </dl>
       {(r.note || r.note2) && <p className="mt-2 text-xs text-muted-foreground">Ghi chú: {[r.note, r.note2].filter(Boolean).join(" | ")}</p>}
       {r.flags.length > 0 && (
@@ -1483,5 +1484,7 @@ const FULL_COLUMNS: Column<TourItem>[] = [
   { key: "price", header: "Giá vé (đ)", render: (r) => formatNumber(r.price), align: "right" },
   { key: "revenue", header: "Doanh thu dự kiến (đ)", render: (r) => formatNumber(r.revenue), align: "right" },
   { key: "note2", header: "Note 2", render: (r) => r.note2 ?? "—" },
+  { key: "bienBanId", header: "BienBanID", render: (r) => r.bienBanId ?? "—" },
+  { key: "tenKhachHang", header: "TenKhachHang", render: (r) => r.tenKhachHang ?? "—" },
   { key: "flags", header: "Lưu ý dữ liệu", render: (r) => r.flags.join("; ") },
 ];

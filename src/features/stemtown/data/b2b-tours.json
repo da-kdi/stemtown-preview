@@ -20,7 +20,9 @@
     "Tiến độ": "Done",
     "Giá vé": 150000,
     "Doanh thu dự kiến": 5700000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-01",
@@ -43,7 +45,9 @@
     "Tiến độ": "Đã cọc",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 44030000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-01",
@@ -66,7 +70,9 @@
     "Tiến độ": "Done",
     "Giá vé": 150000,
     "Doanh thu dự kiến": 33000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-01",
@@ -89,7 +95,9 @@
     "Tiến độ": "Done",
     "Giá vé": 150000,
     "Doanh thu dự kiến": 36900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-01",
@@ -112,7 +120,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 33000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -135,7 +145,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 6270000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17865-0323.1_03-2026_2_6",
+    "TenKhachHang": "MN Trường Mầm Non Busy Bees Global"
   },
   {
     "Tháng": "2026-03",
@@ -158,7 +170,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 14400000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17836-0325.1_03-2026_2_1",
+    "TenKhachHang": "THCS-THPT TRƯỜNG THCS VÀ THPT ĐỨC TRÍ"
   },
   {
     "Tháng": "2026-03",
@@ -181,7 +195,9 @@
     "Tiến độ": "Done",
     "Giá vé": 0,
     "Doanh thu dự kiến": 0,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -204,7 +220,9 @@
     "Tiến độ": "Done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 51900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -227,7 +245,9 @@
     "Tiến độ": "Done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 47100000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -250,7 +270,9 @@
     "Tiến độ": "Done",
     "Giá vé": 320000,
     "Doanh thu dự kiến": 56000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -273,7 +295,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 53600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -296,7 +320,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 28120000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17839-0324.1_03-2026_2_1",
+    "TenKhachHang": "THCS-THPT TRƯỜNG THCS VÀ THPT ĐINH THIỆN LÝ"
   },
   {
     "Tháng": "2026-03",
@@ -319,7 +345,9 @@
     "Tiến độ": "Done",
     "Giá vé": 140000,
     "Doanh thu dự kiến": 25480000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -342,7 +370,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 44000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-03",
@@ -365,7 +395,9 @@
     "Tiến độ": "Done",
     "Giá vé": 140000,
     "Doanh thu dự kiến": 27720000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -388,7 +420,9 @@
     "Tiến độ": "Done",
     "Giá vé": 140000,
     "Doanh thu dự kiến": 30240000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -411,7 +445,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 28690000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -434,7 +470,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 9120000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17130-0120.1_04-2026_2_1",
+    "TenKhachHang": "THPT Bình Chiểu"
   },
   {
     "Tháng": "2026-04",
@@ -457,7 +495,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 4960000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -480,7 +520,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 45000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -503,7 +545,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 5760000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -526,7 +570,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 11200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -549,7 +595,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 14000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -572,7 +620,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 14000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -595,7 +645,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 5040000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -618,7 +670,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 8820000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-04",
@@ -641,7 +695,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 10200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17817-0336.1_04-2026_2_1",
+    "TenKhachHang": "MN TRƯỜNG MẦM NON HỌC VIỆN TRẺ THƠ"
   },
   {
     "Tháng": "2026-05",
@@ -664,7 +720,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 30600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C26296-0337.1_05-2026_2_4",
+    "TenKhachHang": "MN TRƯỜNG MẦM NON ABC Á CHÂU"
   },
   {
     "Tháng": "2026-05",
@@ -687,7 +745,9 @@
     "Tiến độ": "Done",
     "Giá vé": 340000,
     "Doanh thu dự kiến": 100980000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C26296-0340.1_05-2026_2_2",
+    "TenKhachHang": "TH-THCS-THPT SONG NGỮ Á CHÂU"
   },
   {
     "Tháng": "2026-05",
@@ -710,7 +770,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 20800000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -733,7 +795,9 @@
     "Tiến độ": "Done",
     "Giá vé": "Miễn phí",
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -756,7 +820,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 1000000,
-    "Note 2": "Yến thanh toán theo b2b"
+    "Note 2": "Yến thanh toán theo b2b",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -779,7 +845,9 @@
     "Tiến độ": "Done",
     "Giá vé": "Miễn phí",
     "Doanh thu dự kiến": null,
-    "Note 2": "Như làm tờ trình"
+    "Note 2": "Như làm tờ trình",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -802,7 +870,9 @@
     "Tiến độ": "Done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 33600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -825,7 +895,9 @@
     "Tiến độ": "Done",
     "Giá vé": 130000,
     "Doanh thu dự kiến": 39000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -848,7 +920,9 @@
     "Tiến độ": "Done",
     "Giá vé": 255000,
     "Doanh thu dự kiến": 7650000,
-    "Note 2": "Sáng tham quan trưa mượn khu lầu 2 thi robot, sa bàn tự trãi, ko lock khu vực"
+    "Note 2": "Sáng tham quan trưa mượn khu lầu 2 thi robot, sa bàn tự trãi, ko lock khu vực",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -871,7 +945,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 12000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17821-0345.1_05-2026_2_1",
+    "TenKhachHang": "THPT TEN LƠ MAN"
   },
   {
     "Tháng": "2026-05",
@@ -894,7 +970,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 23600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -917,7 +995,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 19600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -940,7 +1020,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 27200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -963,7 +1045,9 @@
     "Tiến độ": "Done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 43200000,
-    "Note 2": "14:00 phải đi về, block mỳ gói"
+    "Note 2": "14:00 phải đi về, block mỳ gói",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -986,7 +1070,9 @@
     "Tiến độ": "Done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 52200000,
-    "Note 2": "14:00 phải đi về, block mỳ gói"
+    "Note 2": "14:00 phải đi về, block mỳ gói",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1009,7 +1095,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 19800000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1032,7 +1120,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 20000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17845-0347.1_05-2026_2_1",
+    "TenKhachHang": "Tiểu học Bắc Hải"
   },
   {
     "Tháng": "2026-05",
@@ -1055,7 +1145,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 8000000,
-    "Note 2": "2:00 - 17:00"
+    "Note 2": "2:00 - 17:00",
+    "BienBanID": "C17869-0351.1_05-2026_2_1",
+    "TenKhachHang": "THPT TRƯỜNG THPT NGUYỄN CÔNG TRỨ"
   },
   {
     "Tháng": "2026-05",
@@ -1078,7 +1170,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 4000000,
-    "Note 2": "Báo giá, checkin, checkout"
+    "Note 2": "Báo giá, checkin, checkout",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1101,7 +1195,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 7600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17190-0121.1_04-2026_2_1",
+    "TenKhachHang": "THPT Bình Tân"
   },
   {
     "Tháng": "2026-05",
@@ -1124,7 +1220,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 6400000,
-    "Note 2": "Khối 5, Vận hành theo tour từ 8:00-10:30,\nChơi tự do đến 11:30\nXuất hđ khách lẻ"
+    "Note 2": "Khối 5, Vận hành theo tour từ 8:00-10:30,\nChơi tự do đến 11:30\nXuất hđ khách lẻ",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1147,7 +1245,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 48000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17865-0343.1_05-2026_2_1",
+    "TenKhachHang": "THCS-THPT Cơ sở số 1- Trường THCS và THPT Phạm Ngũ Lão"
   },
   {
     "Tháng": "2026-05",
@@ -1170,7 +1270,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 26220000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1193,7 +1295,9 @@
     "Tiến độ": "Done",
     "Giá vé": "Miễn phí",
     "Doanh thu dự kiến": null,
-    "Note 2": "15h20 cho hs lên xe"
+    "Note 2": "15h20 cho hs lên xe",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1216,7 +1320,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 18000000,
-    "Note 2": "Đoàn SV Phillipines nên yêu cầu tiếng anh, đi tour 10h -12h, học ws chuyên sâu 14h -16h"
+    "Note 2": "Đoàn SV Phillipines nên yêu cầu tiếng anh, đi tour 10h -12h, học ws chuyên sâu 14h -16h",
+    "BienBanID": "C17903-0348.1_05-2026_2_1",
+    "TenKhachHang": "Cao đẳng Việt Mỹ"
   },
   {
     "Tháng": "2026-05",
@@ -1239,7 +1345,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 16000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-05",
@@ -1262,7 +1370,9 @@
     "Tiến độ": "Done",
     "Giá vé": 240000,
     "Doanh thu dự kiến": 8400000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17877-0349.1_05-2026_2_1",
+    "TenKhachHang": "CÔNG TY CỔ PHẦN UPS VIỆTNAM"
   },
   {
     "Tháng": "2026-06",
@@ -1285,7 +1395,9 @@
     "Tiến độ": "Done",
     "Giá vé": 228000,
     "Doanh thu dự kiến": 2736000,
-    "Note 2": "Qùa tặng 1/6 khắt tên cho học sinh (có thể in laser hoặc in 3D)\nVé"
+    "Note 2": "Qùa tặng 1/6 khắt tên cho học sinh (có thể in laser hoặc in 3D)\nVé",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1308,7 +1420,9 @@
     "Tiến độ": "Done",
     "Giá vé": null,
     "Doanh thu dự kiến": 0,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": null,
@@ -1331,7 +1445,9 @@
     "Tiến độ": null,
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": null,
@@ -1354,7 +1470,9 @@
     "Tiến độ": null,
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1377,7 +1495,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 11340000,
-    "Note 2": "Báo giá, checkin"
+    "Note 2": "Báo giá, checkin",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": null,
@@ -1400,7 +1520,9 @@
     "Tiến độ": "Done",
     "Giá vé": null,
     "Doanh thu dự kiến": 0,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1423,7 +1545,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 5200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1446,7 +1570,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 40320000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1469,7 +1595,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 17440000,
-    "Note 2": "DEAL ĐỔI NGÀY"
+    "Note 2": "DEAL ĐỔI NGÀY",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1492,7 +1620,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 2700000,
-    "Note 2": "Báo giá, checkin"
+    "Note 2": "Báo giá, checkin",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": null,
@@ -1515,7 +1645,9 @@
     "Tiến độ": "Done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1538,7 +1670,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 29410000,
-    "Note 2": "Yêu cầu y tế, đối với tour VAS, nhờ hỗ trợ sẽ có 1 bạn trợ giảng phụ trách 1 nhóm trong suốt chương trình"
+    "Note 2": "Yêu cầu y tế, đối với tour VAS, nhờ hỗ trợ sẽ có 1 bạn trợ giảng phụ trách 1 nhóm trong suốt chương trình",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1561,7 +1695,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 15980000,
-    "Note 2": "Yêu cầu y tế"
+    "Note 2": "Yêu cầu y tế",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1584,7 +1720,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 6120000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1607,7 +1745,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 22270000,
-    "Note 2": "Yêu cầu y tế"
+    "Note 2": "Yêu cầu y tế",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1630,7 +1770,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 20230000,
-    "Note 2": "Yêu cầu y tế"
+    "Note 2": "Yêu cầu y tế",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1653,7 +1795,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 5580000,
-    "Note 2": "Ăn trưa tới 1h"
+    "Note 2": "Ăn trưa tới 1h",
+    "BienBanID": "C17758-0362.1_06-2026_2_1",
+    "TenKhachHang": "CÔNG TY TNHH ĐÀO TẠO VÀ DỊCH VỤ HOÀNG  NGUYÊN"
   },
   {
     "Tháng": "2026-06",
@@ -1676,7 +1820,9 @@
     "Tiến độ": "Done",
     "Giá vé": 216000,
     "Doanh thu dự kiến": 9936000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1699,7 +1845,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 12540000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1722,7 +1870,9 @@
     "Tiến độ": "Done",
     "Giá vé": 240000,
     "Doanh thu dự kiến": 3600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1745,7 +1895,9 @@
     "Tiến độ": "Done",
     "Giá vé": 228000,
     "Doanh thu dự kiến": 2736000,
-    "Note 2": "Vé lẻ"
+    "Note 2": "Vé lẻ",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1768,7 +1920,9 @@
     "Tiến độ": "Done",
     "Giá vé": null,
     "Doanh thu dự kiến": 30000000,
-    "Note 2": "lock tầng 1 và 2"
+    "Note 2": "lock tầng 1 và 2",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1791,7 +1945,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 7800000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-06",
@@ -1814,7 +1970,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 36000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1837,7 +1995,9 @@
     "Tiến độ": "Done",
     "Giá vé": 240000,
     "Doanh thu dự kiến": 2400000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1860,7 +2020,9 @@
     "Tiến độ": "Done",
     "Giá vé": 350000,
     "Doanh thu dự kiến": 21350000,
-    "Note 2": "Tiếng Anh 100%, Yêu cầu y tế"
+    "Note 2": "Tiếng Anh 100%, Yêu cầu y tế",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1883,7 +2045,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 20520000,
-    "Note 2": "Timeline vận hành: https://docs.google.com/spreadsheets/d/1XUZRTY1uV2R0cRVQvzCAFdb_6g405EuNJAclDn6yDd4/edit?gid=1815329123#gid=1815329123"
+    "Note 2": "Timeline vận hành: https://docs.google.com/spreadsheets/d/1XUZRTY1uV2R0cRVQvzCAFdb_6g405EuNJAclDn6yDd4/edit?gid=1815329123#gid=1815329123",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1906,7 +2070,9 @@
     "Tiến độ": "Done",
     "Giá vé": 140000,
     "Doanh thu dự kiến": 4760000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1929,7 +2095,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 26100000,
-    "Note 2": "Chiều K3,5)"
+    "Note 2": "Chiều K3,5)",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1952,7 +2120,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 29160000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1975,7 +2145,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 36900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -1998,7 +2170,9 @@
     "Tiến độ": "Done",
     "Giá vé": 400000,
     "Doanh thu dự kiến": 28000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2021,7 +2195,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 7200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17858-0405.1_07-2026_2_1",
+    "TenKhachHang": "CÔNG TY TNHH ĐẦU TƯ GIÁO DỤC NGHỆ THUẬT SÁNG TẠO WOW ART"
   },
   {
     "Tháng": "2026-07",
@@ -2044,7 +2220,9 @@
     "Tiến độ": "Done",
     "Giá vé": 0,
     "Doanh thu dự kiến": 0,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2067,7 +2245,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 10260000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2090,7 +2270,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 10000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17832-0375.1_07-2026_2_3",
+    "TenKhachHang": "CÔNG TY TNHH MS. NGÂN’S ENGLISH"
   },
   {
     "Tháng": "2026-07",
@@ -2113,7 +2295,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 32760000,
-    "Note 2": "Yêu cầu y tế"
+    "Note 2": "Yêu cầu y tế",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2136,7 +2320,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 6200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2159,7 +2345,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 9280000,
-    "Note 2": "2 Tầng Tàng 2 và 3, chơi ORC"
+    "Note 2": "2 Tầng Tàng 2 và 3, chơi ORC",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2182,7 +2370,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 61020000,
-    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm"
+    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2205,7 +2395,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 64440000,
-    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm"
+    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2228,7 +2420,9 @@
     "Tiến độ": "Done",
     "Giá vé": 140000,
     "Doanh thu dự kiến": 7140000,
-    "Note 2": "10:30 Đến đợi ở Phòng học lầu 2\nchơi đến 14:00"
+    "Note 2": "10:30 Đến đợi ở Phòng học lầu 2\nchơi đến 14:00",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2251,7 +2445,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 12160000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2274,7 +2470,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 18900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C17838-0380.1_07-2026_2_1",
+    "TenKhachHang": "CÔNG TY CỔ PHẦN TRƯỜNG MẦM NON CANADA - VIỆT NAM"
   },
   {
     "Tháng": "2026-07",
@@ -2297,7 +2495,9 @@
     "Tiến độ": "Done",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 57060000,
-    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm"
+    "Note 2": "Thi đấu robot ORC\nWS Thiết kế in 3D sản phẩm",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2320,7 +2520,9 @@
     "Tiến độ": "Done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 12480000,
-    "Note 2": "3 tầng, lập trình vs AI"
+    "Note 2": "3 tầng, lập trình vs AI",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2343,7 +2545,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 31350000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2366,7 +2570,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 57970000,
-    "Note 2": "Workshop cắt laser: Học sinh trải nghiệm thiết kế sản phẩm và cắt laser \n Hoạt động làm sản phẩm handmade KHUNG TRANH \nHoạt động xưng phong trải nghiệm thiết kế sản phẩm 3D \nkính 3D.\nChuẩn bị và gửi dây đeo sang trường trước ngày diễn ra, trường sẽ chia dây đeo trên xe để tối ưu thời gian checkin"
+    "Note 2": "Workshop cắt laser: Học sinh trải nghiệm thiết kế sản phẩm và cắt laser \n Hoạt động làm sản phẩm handmade KHUNG TRANH \nHoạt động xưng phong trải nghiệm thiết kế sản phẩm 3D \nkính 3D.\nChuẩn bị và gửi dây đeo sang trường trước ngày diễn ra, trường sẽ chia dây đeo trên xe để tối ưu thời gian checkin",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2389,7 +2595,9 @@
     "Tiến độ": "Đã cọc",
     "Giá vé": 350000,
     "Doanh thu dự kiến": 17500000,
-    "Note 2": "13:00 Sân khấu gala của trường"
+    "Note 2": "13:00 Sân khấu gala của trường",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2412,7 +2620,9 @@
     "Tiến độ": "Process HĐ",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 44960000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2435,7 +2645,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 20900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2458,7 +2670,9 @@
     "Tiến độ": "Done",
     "Giá vé": 228000,
     "Doanh thu dự kiến": 3420000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2481,7 +2695,9 @@
     "Tiến độ": "Done",
     "Giá vé": 228000,
     "Doanh thu dự kiến": 6612000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2504,7 +2720,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 1000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2527,7 +2745,9 @@
     "Tiến độ": "Done",
     "Giá vé": 240000,
     "Doanh thu dự kiến": 1920000,
-    "Note 2": "Có ăn,nghỉ trưa, check out trước 14h\nHoạt động xưng phong trải nghiệm thiết kế sản phẩm 3D \nkính 3D."
+    "Note 2": "Có ăn,nghỉ trưa, check out trước 14h\nHoạt động xưng phong trải nghiệm thiết kế sản phẩm 3D \nkính 3D.",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2550,7 +2770,9 @@
     "Tiến độ": "Done",
     "Giá vé": 228500,
     "Doanh thu dự kiến": 2742000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2573,7 +2795,9 @@
     "Tiến độ": null,
     "Giá vé": 340000,
     "Doanh thu dự kiến": 109820000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C26296-0413.1_07-2026_2_1",
+    "TenKhachHang": "TH-THCS-THPT SONG NGỮ Á CHÂU"
   },
   {
     "Tháng": "2026-07",
@@ -2596,7 +2820,9 @@
     "Tiến độ": "Done",
     "Giá vé": 370000,
     "Doanh thu dự kiến": 18870000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2619,7 +2845,9 @@
     "Tiến độ": "Done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 10600000,
-    "Note 2": "có ăn trưa"
+    "Note 2": "có ăn trưa",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2642,7 +2870,9 @@
     "Tiến độ": "Done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 4750000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2665,7 +2895,9 @@
     "Tiến độ": "Done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 6290000,
-    "Note 2": "Ăn trưa"
+    "Note 2": "Ăn trưa",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2688,7 +2920,9 @@
     "Tiến độ": "Done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-07",
@@ -2711,7 +2945,9 @@
     "Tiến độ": null,
     "Giá vé": 150000,
     "Doanh thu dự kiến": 4500000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2734,7 +2970,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2757,7 +2995,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2780,7 +3020,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2803,7 +3045,9 @@
     "Tiến độ": "done",
     "Giá vé": 20000000,
     "Doanh thu dự kiến": 20000000,
-    "Note 2": "Trạm trải nghiệm, 1800 HS"
+    "Note 2": "Trạm trải nghiệm, 1800 HS",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2826,7 +3070,9 @@
     "Tiến độ": "done",
     "Giá vé": 320000,
     "Doanh thu dự kiến": 29440000,
-    "Note 2": "ĂN TRUA"
+    "Note 2": "ĂN TRUA",
+    "BienBanID": "C26308-0401.1_08-2026_2_1",
+    "TenKhachHang": "TH-THCS Á CHÂU LONG THÀNH"
   },
   {
     "Tháng": "2026-08",
@@ -2849,7 +3095,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2872,7 +3120,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2895,7 +3145,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2918,7 +3170,9 @@
     "Tiến độ": "done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 19200000,
-    "Note 2": "Ăn trưa"
+    "Note 2": "Ăn trưa",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2941,7 +3195,9 @@
     "Tiến độ": "done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 19200000,
-    "Note 2": "Ăn trưa"
+    "Note 2": "Ăn trưa",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2964,7 +3220,9 @@
     "Tiến độ": "done",
     "Giá vé": 190000,
     "Doanh thu dự kiến": 17670000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -2987,7 +3245,9 @@
     "Tiến độ": "done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 28500000,
-    "Note 2": "Phạm Thị Quỳnh Anh - TTTN book chụp ảnh giúp em nha"
+    "Note 2": "Phạm Thị Quỳnh Anh - TTTN book chụp ảnh giúp em nha",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3010,7 +3270,9 @@
     "Tiến độ": "done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 4000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3033,7 +3295,9 @@
     "Tiến độ": "done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 3600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3056,7 +3320,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3079,7 +3345,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3102,7 +3370,9 @@
     "Tiến độ": "done",
     "Giá vé": 160000,
     "Doanh thu dự kiến": 9600000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3125,7 +3395,9 @@
     "Tiến độ": "done",
     "Giá vé": 240000,
     "Doanh thu dự kiến": 6840000,
-    "Note 2": "WS: Kính 3D"
+    "Note 2": "WS: Kính 3D",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3148,7 +3420,9 @@
     "Tiến độ": "done",
     "Giá vé": 300000,
     "Doanh thu dự kiến": 15900000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-08",
@@ -3171,7 +3445,9 @@
     "Tiến độ": null,
     "Giá vé": 160000,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3194,7 +3470,9 @@
     "Tiến độ": "done",
     "Giá vé": 200000,
     "Doanh thu dự kiến": 7000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3217,7 +3495,9 @@
     "Tiến độ": "done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 23800000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3240,7 +3520,9 @@
     "Tiến độ": "done",
     "Giá vé": null,
     "Doanh thu dự kiến": null,
-    "Note 2": "Khách mời quan trọng, bố trí đón khách như đoàn Mỹ Tho"
+    "Note 2": "Khách mời quan trọng, bố trí đón khách như đoàn Mỹ Tho",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3263,7 +3545,9 @@
     "Tiến độ": "done",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 23800000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3286,7 +3570,9 @@
     "Tiến độ": "Đã cọc",
     "Giá vé": 180000,
     "Doanh thu dự kiến": 30780000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": "C26297-0481.1_09-2026_2_1",
+    "TenKhachHang": "TH-THCS SAO KHUÊ"
   },
   {
     "Tháng": "2026-09",
@@ -3309,7 +3595,9 @@
     "Tiến độ": "Đã cọc",
     "Giá vé": 170000,
     "Doanh thu dự kiến": 22100000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3332,7 +3620,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 6400000,
-    "Note 2": "Tour Tiếng Anh"
+    "Note 2": "Tour Tiếng Anh",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3355,7 +3645,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 6800000,
-    "Note 2": "Tour Tiếng Anh"
+    "Note 2": "Tour Tiếng Anh",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3378,7 +3670,9 @@
     "Tiến độ": null,
     "Giá vé": 140000,
     "Doanh thu dự kiến": 25340000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-09",
@@ -3401,7 +3695,9 @@
     "Tiến độ": null,
     "Giá vé": 140000,
     "Doanh thu dự kiến": 28000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3424,7 +3720,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 0,
-    "Note 2": "500"
+    "Note 2": "500",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3447,7 +3745,9 @@
     "Tiến độ": null,
     "Giá vé": 150000,
     "Doanh thu dự kiến": null,
-    "Note 2": "500"
+    "Note 2": "500",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3470,7 +3770,9 @@
     "Tiến độ": null,
     "Giá vé": 150000,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3493,7 +3795,9 @@
     "Tiến độ": null,
     "Giá vé": 160000,
     "Doanh thu dự kiến": 14400000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3516,7 +3820,9 @@
     "Tiến độ": null,
     "Giá vé": 180000,
     "Doanh thu dự kiến": 9000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3539,7 +3845,9 @@
     "Tiến độ": null,
     "Giá vé": 240000,
     "Doanh thu dự kiến": 25200000,
-    "Note 2": "3 nhóm"
+    "Note 2": "3 nhóm",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3562,7 +3870,9 @@
     "Tiến độ": null,
     "Giá vé": 180000,
     "Doanh thu dự kiến": null,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3585,7 +3895,9 @@
     "Tiến độ": null,
     "Giá vé": 240000,
     "Doanh thu dự kiến": 5760000,
-    "Note 2": "WS kính 3D"
+    "Note 2": "WS kính 3D",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3608,7 +3920,9 @@
     "Tiến độ": null,
     "Giá vé": 190000,
     "Doanh thu dự kiến": 28500000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3631,7 +3945,9 @@
     "Tiến độ": null,
     "Giá vé": 300000,
     "Doanh thu dự kiến": 42000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-10",
@@ -3654,7 +3970,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 6000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3677,7 +3995,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 20000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3700,7 +4020,9 @@
     "Tiến độ": null,
     "Giá vé": 210000,
     "Doanh thu dự kiến": 126000000,
-    "Note 2": "làm xe đua thần tốc"
+    "Note 2": "làm xe đua thần tốc",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3723,7 +4045,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 36200000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3746,7 +4070,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 50000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3769,7 +4095,9 @@
     "Tiến độ": null,
     "Giá vé": 180000,
     "Doanh thu dự kiến": 9000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3792,7 +4120,9 @@
     "Tiến độ": null,
     "Giá vé": 200000,
     "Doanh thu dự kiến": 40000000,
-    "Note 2": "Science Show"
+    "Note 2": "Science Show",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-11",
@@ -3815,7 +4145,9 @@
     "Tiến độ": null,
     "Giá vé": 300000,
     "Doanh thu dự kiến": null,
-    "Note 2": "tour tiếng anh"
+    "Note 2": "tour tiếng anh",
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-12",
@@ -3838,7 +4170,9 @@
     "Tiến độ": null,
     "Giá vé": 180000,
     "Doanh thu dự kiến": 45000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   },
   {
     "Tháng": "2026-12",
@@ -3861,6 +4195,8 @@
     "Tiến độ": null,
     "Giá vé": 300000,
     "Doanh thu dự kiến": 75000000,
-    "Note 2": null
+    "Note 2": null,
+    "BienBanID": null,
+    "TenKhachHang": null
   }
 ]
