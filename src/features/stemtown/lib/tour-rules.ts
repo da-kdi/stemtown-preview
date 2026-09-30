@@ -105,6 +105,14 @@ export function classifyTour(_r: TourRow): TourKind {
   return "tour";
 }
 
+/** Trạng thái đối chiếu vận hành — Tiến độ chỉ còn 2 mức (Done/Chưa đi theo mọi trạng thái khác);
+ *  trong "Done" tách tiếp theo đã match được BienBanID hay chưa. */
+export type RecStatus = "Chưa đi" | "Đã nghiệm thu" | "Chưa nghiệm thu";
+export function reconcileStatus(r: { status: string; bienBanId: string | null }): RecStatus {
+  if (r.status !== "Done") return "Chưa đi";
+  return r.bienBanId ? "Đã nghiệm thu" : "Chưa nghiệm thu";
+}
+
 export function parseSlot(raw: string | null): { start: number; end: number; assumed: boolean } | null {
   const s = (raw ?? "").trim();
   if (!s) return null;
