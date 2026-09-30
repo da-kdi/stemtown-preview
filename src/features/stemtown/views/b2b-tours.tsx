@@ -32,8 +32,10 @@ import {
   QUICK_RANGES,
   WEEKDAYS,
   addDays,
+  buoiLoad,
   commercialTours,
   dayInfo,
+  daySlots,
   dm,
   enrichTours,
   hhmm,
@@ -932,11 +934,18 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                   {p === 18 ? "Thấp" : p === 100 ? "Cao" : ""}
                 </span>
               ))}
-              <span className="inline-flex items-center gap-1">
-                <i className="inline-block size-3 rounded-sm border-2" style={{ borderColor: WARN }} />
-                Trên {TOUR_RULES.capacityWarn} HS
-              </span>
             </div>
+          </div>
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <i className="size-2 rounded-full bg-[#2e9e5b]" /> Còn chỗ cả 2 buổi
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <i className="size-2 rounded-full" style={{ background: WARN }} /> 1 buổi đã Full
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <i className="size-2 rounded-full bg-destructive" /> Cả 2 buổi Full
+            </span>
           </div>
           <div ref={hmScroll} className="relative overflow-auto border-t border-border">
             <table className="w-full min-w-[340px] border-separate border-spacing-[3px] text-xs">
@@ -999,7 +1008,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                         {byMetric.map((v, i) => (
                           <td
                             key={i}
-                            className="rounded py-1.5 text-center text-[11px]"
+                            className="py-1.5 text-center text-[11px]"
                             style={{ background: v ? mix(CHART_COLORS.primary, 15 + Math.round((v / monthMax) * 85)) : "var(--secondary)", color: v / monthMax >= 0.6 ? "#fff" : undefined }}
                             title={`${WEEKDAYS[i]} trong ${monthLabel(m)}: ${byTour[i]} tour, ${formatNumber(byHs[i] ?? 0)} HS, ${fTr(byDt[i] ?? 0)}`}
                           >
@@ -1028,11 +1037,19 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                 const pct = metricPct(v);
                                 const out = d.slice(0, 7) !== m;
                                 const isFocus = isSel && d === focusDay;
+                                const cap = TOUR_RULES.capacityWarn;
+                                const { sang, chieu } = buoiLoad(dated, d);
+                                const hasTour = sang > 0 || chieu > 0;
+                                const fullCount = (sang >= cap ? 1 : 0) + (chieu >= cap ? 1 : 0);
+                                const dotColor = !hasTour ? null : fullCount === 2 ? "var(--destructive)" : fullCount === 1 ? WARN : "#2e9e5b";
+                                const statusText = !hasTour
+                                  ? "Chưa có tour"
+                                  : `Sáng: ${formatNumber(sang)}/${cap} ${sang >= cap ? "(Full)" : `(còn ${formatNumber(cap - sang)} HS)`} · Chiều: ${formatNumber(chieu)}/${cap} ${chieu >= cap ? "(Full)" : `(còn ${formatNumber(cap - chieu)} HS)`}`;
                                 return (
                                   <td
                                     key={d}
                                     className={cn(
-                                      "relative h-11 cursor-pointer rounded-md border p-0 text-center align-middle",
+                                      "relative h-11 cursor-pointer rounded-none border p-0 text-center align-middle",
                                       isSel ? "border-primary" : "border-border",
                                       out && "opacity-40",
                                     )}
@@ -1040,9 +1057,8 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                       background: pct ? mix(CHART_COLORS.primary, pct) : "transparent",
                                       color: pct >= 70 ? "#fff" : undefined,
                                       boxShadow: isFocus ? "inset 0 0 0 2px var(--foreground)" : undefined,
-                                      ...(inf.load > TOUR_RULES.capacityWarn ? { borderColor: WARN, borderWidth: 2 } : {}),
                                     }}
-                                    title={`${WEEKDAYS[i]} ${dm(d)}: ${inf.tours} tour, ${formatNumber(inf.load)} HS`}
+                                    title={`${WEEKDAYS[i]} ${dm(d)} — ${statusText}`}
                                     onClick={() => selectWeek(w, d)}
                                   >
                                     <span
@@ -1051,6 +1067,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                     >
                                       {Number(d.slice(8))}
                                     </span>
+                                    {dotColor && <span className="absolute right-1 top-1 size-2 rounded-full" style={{ background: dotColor }} />}
                                     <span className="text-[13px] font-semibold tabular-nums">{fmtMetric(v, hmMetric)}</span>
                                   </td>
                                 );
@@ -1087,10 +1104,60 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
               <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs hover:bg-secondary" onClick={() => selectWeek(addDays(week, 7), null)}>
                 Tuần sau <ChevronRight className="size-3.5" />
               </button>
+              <button
+                type="button"
+                className={cn("rounded-md border px-2.5 py-1 text-xs hover:bg-secondary", detailOpen ? "border-[var(--brand-accent)] text-[var(--brand-accent)]" : "border-border")}
+                onClick={() => setDetailOpen((v) => !v)}
+              >
+                Chi tiết tour {detailOpen ? "▸ ẩn" : "▸ hiện"}
+              </button>
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_200px]">
+          {focusDay && (
+            <div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="mb-2 text-xs font-semibold">
+                Slot trống {WEEKDAYS[weekdayIdx(focusDay)]} {dm(focusDay)}
+              </p>
+              {(() => {
+                const cap = TOUR_RULES.capacityWarn;
+                const slots = daySlots(dated, focusDay);
+                const dayStart = TOUR_RULES.fullDay[0];
+                const dayEnd = TOUR_RULES.fullDay[1];
+                const rows: { start: number; end: number; load: number }[] = [];
+                let cursor: number = dayStart;
+                for (const s of slots) {
+                  if (s.start > cursor) rows.push({ start: cursor, end: s.start, load: 0 });
+                  rows.push({ start: s.start, end: s.end, load: s.load });
+                  cursor = s.end;
+                }
+                if (cursor < dayEnd) rows.push({ start: cursor, end: dayEnd, load: 0 });
+                return (
+                  <div className="grid gap-1.5">
+                    {rows.map((r, i) => {
+                      const pct = Math.min(100, Math.round((r.load / cap) * 100));
+                      const full = r.load >= cap;
+                      return (
+                        <div key={i} className="grid grid-cols-[92px_1fr_auto] items-center gap-2 text-xs">
+                          <span className="tabular-nums text-muted-foreground">
+                            {hhmm(r.start)}–{hhmm(r.end)}
+                          </span>
+                          <div className="h-3 overflow-hidden bg-secondary">
+                            <div className="h-full" style={{ width: `${pct}%`, background: full ? "var(--destructive)" : r.load > 0 ? WARN : "transparent" }} />
+                          </div>
+                          <span className={cn("whitespace-nowrap font-medium", full && "text-destructive")}>
+                            {r.load === 0 ? `Trống · còn ${formatNumber(cap)} HS` : full ? `${formatNumber(r.load)}/${cap} · FULL` : `${formatNumber(r.load)}/${cap} · còn ${formatNumber(cap - r.load)} HS`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          <div className={cn("grid gap-3", detailOpen ? "lg:grid-cols-[minmax(0,1fr)_200px]" : "grid-cols-1")}>
             <div className="min-w-0">
               {/* Cột = thứ, hàng = giờ */}
               <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] text-[11px]">
@@ -1182,8 +1249,12 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                               borderBottomStyle: r.endAssumed ? "dashed" : undefined,
                             }}
                           >
-                            <b className="block">{r.schoolName}</b>
-                            {formatNumber(r.students)} HS
+                            <b className="block truncate">{r.schoolName}</b>
+                            <span className="block">
+                              {hhmm(r.start as number)}–{hhmm(r.end as number)} · {formatNumber(r.students)} HS
+                            </span>
+                            {r.sale && <span className="block truncate opacity-90">Sale: {r.sale}</span>}
+                            <span className="block truncate opacity-90">{r.status}</span>
                           </button>
                         );
                       })}
@@ -1193,25 +1264,14 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
               </div>
             </div>
 
-            {/* Chi tiết tour đang chọn — nằm bên phải lịch tuần, có thể ẩn/hiện */}
-            <div className="self-start">
-              <button
-                type="button"
-                onClick={() => setDetailOpen((v) => !v)}
-                className="mb-1 inline-flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+            {detailOpen && (
+              <aside
+                className="min-w-0 self-start break-words rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
+                style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
               >
-                Chi tiết tour
-                <span className="text-muted-foreground">{detailOpen ? "Ẩn ▾" : "Hiện ▸"}</span>
-              </button>
-              {detailOpen && (
-                <aside
-                  className="break-words rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
-                  style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
-                >
-                  {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
-                </aside>
-              )}
-            </div>
+                {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
+              </aside>
+            )}
           </div>
         </section>
       </div>

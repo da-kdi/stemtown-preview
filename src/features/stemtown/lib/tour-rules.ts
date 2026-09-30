@@ -203,6 +203,43 @@ export function dayInfo(items: TourItem[], d: string): DayInfo {
   return { items: list, load, tours: list.filter((r) => r.kind === "tour").length, hasOther: list.some((r) => r.kind !== "tour"), peak };
 }
 
+export type DaySlot = { start: number; end: number; load: number; items: TourItem[] };
+
+/** Chia 1 ngày thành các khối giờ liên tục (sweep-line theo start/end thật của từng tour) — mỗi
+ *  khối biết đang có tổng bao nhiêu HS và (những) tour nào đang chiếm chỗ trong khối đó. Khoảng
+ *  trống (không tour nào) không xuất hiện trong danh sách trả về. */
+export function daySlots(items: TourItem[], d: string): DaySlot[] {
+  const tours = items.filter(
+    (r): r is TourItem & { start: number; end: number } => r.date === d && r.kind === "tour" && r.start !== null && r.end !== null && r.end > r.start,
+  );
+  if (!tours.length) return [];
+  const bounds = Array.from(new Set(tours.flatMap((r) => [r.start, r.end]))).sort((a, b) => a - b);
+  const raw: DaySlot[] = [];
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const s = bounds[i] as number;
+    const e = bounds[i + 1] as number;
+    const covering = tours.filter((r) => r.start <= s && r.end >= e);
+    const load = covering.reduce((a, r) => a + r.students, 0);
+    if (load > 0) raw.push({ start: s, end: e, load, items: covering });
+  }
+  const sameItems = (a: TourItem[], b: TourItem[]) => a.length === b.length && a.every((x) => b.some((y) => y.id === x.id));
+  const merged: DaySlot[] = [];
+  for (const seg of raw) {
+    const last = merged[merged.length - 1];
+    if (last && last.end === seg.start && last.load === seg.load && sameItems(last.items, seg.items)) last.end = seg.end;
+    else merged.push({ ...seg });
+  }
+  return merged;
+}
+
+/** Tổng HS theo buổi trong ngày — "Full ngày" tính vào cả Sáng lẫn Chiều (chiếm trọn slot). */
+export function buoiLoad(items: TourItem[], d: string): { sang: number; chieu: number } {
+  const list = items.filter((r) => r.date === d && r.kind === "tour");
+  const sang = list.filter((r) => r.buoi === "Sáng" || r.buoi === "Full ngày").reduce((a, r) => a + r.students, 0);
+  const chieu = list.filter((r) => r.buoi === "Chiều" || r.buoi === "Full ngày").reduce((a, r) => a + r.students, 0);
+  return { sang, chieu };
+}
+
 /* -------------------------- Khoảng thời gian lọc nhanh -------------------------- */
 
 export type DateRange = { from: string; to: string };
