@@ -5,8 +5,10 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   LabelList,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,7 +20,7 @@ import { FactTable, type Column } from "@/features/stemtown/components/fact-tabl
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
-import { bucketLabel, replaceTourRows, targetFor, tourRows } from "@/features/stemtown/lib/dashboard-data";
+import { bucketLabel, replaceTourRows, targetFor, targetForBucket, tourRows } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
 import {
   clearImportedTours,
@@ -340,7 +342,15 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     return monthKeys.map((m) => {
       const l = rs.filter((r) => r.month === m);
       const t = totalOf(l);
-      return { m, label: monthShort(m, refYear), dt: t.dt, n: t.n, hs: t.hs };
+      return {
+        m,
+        label: monthShort(m, refYear),
+        dt: t.dt,
+        n: t.n,
+        hs: t.hs,
+        dtTarget: targetForBucket("B2B", m, "month", "revenue"),
+        hsTarget: targetForBucket("B2B", m, "month", "students"),
+      };
     });
   }, [rowsExcept, monthKeys, refYear]);
   const timeTot = useMemo(() => timeData.reduce((a, r) => ({ dt: a.dt + r.dt, n: a.n + r.n, hs: a.hs + r.hs }), { dt: 0, n: 0, hs: 0 }), [timeData]);
@@ -421,6 +431,12 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   /** % đạt Target + Còn lại — Target B2B lấy từ sheet KPI (data/kpi.json), theo đúng khoảng ngày đang lọc. */
   const targetDT = useMemo(() => targetFor("B2B", range.from, range.to, "revenue"), [range]);
   const targetHS = useMemo(() => targetFor("B2B", range.from, range.to, "students"), [range]);
+  /** 1 dòng subMetric kèm "(X% tổng)" ngay sau giá trị — dùng cho mọi phân rã Đã đi/Chưa đi, Đã/Chưa nghiệm thu. */
+  const withShare = (label: string, display: string, part: number, total: number, warn = false): SubMetric => ({
+    label,
+    value: total ? `${display} (${formatPercent((part / total) * 100)})` : display,
+    valueStyle: warn ? { color: WARN } : undefined,
+  });
   const targetSub = (actual: number, target: number | null, fmt: (n: number) => string): SubMetric => {
     if (target === null || target <= 0) return { label: "% đạt Target", value: "Chưa đủ dữ liệu" };
     const pct = (actual / target) * 100;
@@ -513,8 +529,9 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           unit="tr"
           change={null}
           subMetrics={[
-            { label: "Đã nghiệm thu", value: fTr(recSplit.dt["Đã nghiệm thu"]) },
-            { label: "Chưa nghiệm thu", value: fTr(recSplit.dt["Chưa nghiệm thu"]), valueStyle: recSplit.dt["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+            withShare("Đã nghiệm thu", fTr(recSplit.dt["Đã nghiệm thu"]), recSplit.dt["Đã nghiệm thu"], tot.dt),
+            withShare("Chưa nghiệm thu", fTr(recSplit.dt["Chưa nghiệm thu"]), recSplit.dt["Chưa nghiệm thu"], tot.dt, recSplit.dt["Chưa nghiệm thu"] > 0),
+            withShare("Chưa đi", fTr(recSplit.dt["Chưa đi"]), recSplit.dt["Chưa đi"], tot.dt),
             targetSub(tot.dt, targetDT, fTr),
           ]}
         />
@@ -524,8 +541,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           unit="tour"
           change={null}
           subMetrics={[
-            { label: "Đã đi", value: formatNumber(doneTotal) },
-            { label: "Chưa đi", value: formatNumber(recCounts["Chưa đi"]) },
+            withShare("Đã đi", formatNumber(doneTotal), doneTotal, tot.n),
+            withShare("Chưa đi", formatNumber(recCounts["Chưa đi"]), recCounts["Chưa đi"], tot.n),
           ]}
         />
         <KpiCard
@@ -534,8 +551,9 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           unit="HS"
           change={null}
           subMetrics={[
-            { label: "Đã nghiệm thu", value: formatNumber(recSplit.hs["Đã nghiệm thu"]) },
-            { label: "Chưa nghiệm thu", value: formatNumber(recSplit.hs["Chưa nghiệm thu"]), valueStyle: recSplit.hs["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+            withShare("Đã nghiệm thu", formatNumber(recSplit.hs["Đã nghiệm thu"]), recSplit.hs["Đã nghiệm thu"], tot.hs),
+            withShare("Chưa nghiệm thu", formatNumber(recSplit.hs["Chưa nghiệm thu"]), recSplit.hs["Chưa nghiệm thu"], tot.hs, recSplit.hs["Chưa nghiệm thu"] > 0),
+            withShare("Chưa đi", formatNumber(recSplit.hs["Chưa đi"]), recSplit.hs["Chưa đi"], tot.hs),
             targetSub(tot.hs, targetHS, (n) => `${formatNumber(Math.round(n))} HS`),
           ]}
         />
@@ -545,8 +563,9 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           unit="sale"
           change={null}
           subMetrics={[
-            { label: "Đã nghiệm thu", value: formatNumber(recCounts["Đã nghiệm thu"]) },
-            { label: "Chưa nghiệm thu", value: formatNumber(recCounts["Chưa nghiệm thu"]), valueStyle: recCounts["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+            withShare("Đã nghiệm thu", formatNumber(recCounts["Đã nghiệm thu"]), recCounts["Đã nghiệm thu"], tot.n),
+            withShare("Chưa nghiệm thu", formatNumber(recCounts["Chưa nghiệm thu"]), recCounts["Chưa nghiệm thu"], tot.n, recCounts["Chưa nghiệm thu"] > 0),
+            withShare("Chưa đi", formatNumber(recCounts["Chưa đi"]), recCounts["Chưa đi"], tot.n),
           ]}
         />
       </div>
@@ -567,7 +586,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
             ))}
           </div>
           <ResponsiveContainer width="100%" height={CHART_H}>
-            <BarChart data={timeData} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
+            <ComposedChart data={timeData} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
               <XAxis dataKey="label" {...axisProps} />
               <YAxis {...axisProps} tickFormatter={(v: number) => (timeMetric === "dt" ? formatShort(v) : formatNumber(v))} width={46} />
@@ -578,9 +597,13 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                   const row = payload[0]?.payload as (typeof timeData)[number];
                   const v = row[timeMetric];
                   const sum = timeTot[timeMetric];
+                  const target = timeMetric === "dt" ? row.dtTarget : timeMetric === "hs" ? row.hsTarget : null;
                   return (
                     <TooltipBox label={monthLabel(row.m)}>
                       <TooltipRow color={TIME_CFG[timeMetric].color} name={TIME_CFG[timeMetric].label} value={v} unit={timeMetric === "dt" ? undefined : timeMetric === "n" ? "tour" : "HS"} share={sum ? (v / sum) * 100 : undefined} />
+                      {target !== null && (
+                        <TooltipRow color={CHART_COLORS.accent} name="Target tháng" value={target} unit={timeMetric === "dt" ? undefined : "HS"} share={target ? (v / target) * 100 : undefined} />
+                      )}
                       <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">Tổng các tháng: {TIME_CFG[timeMetric].fmt(sum)}</p>
                     </TooltipBox>
                   );
@@ -592,7 +615,19 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                 ))}
                 <LabelList dataKey={timeMetric} position="top" formatter={(v: number) => (v === 0 ? "" : TIME_CFG[timeMetric].fmt(v))} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
               </Bar>
-            </BarChart>
+              {timeMetric !== "n" && (
+                <Line
+                  type="monotone"
+                  dataKey={timeMetric === "dt" ? "dtTarget" : "hsTarget"}
+                  name="Target"
+                  stroke={CHART_COLORS.accent}
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  connectNulls={false}
+                />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         </Panel>
 
