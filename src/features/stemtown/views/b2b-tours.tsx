@@ -16,10 +16,10 @@ import {
 import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "@/features/stemtown/components/chart-kit";
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
-import { KpiCard } from "@/features/stemtown/components/kpi";
+import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
-import { bucketLabel, replaceTourRows, tourRows } from "@/features/stemtown/lib/dashboard-data";
-import { formatNumber, formatShort } from "@/features/stemtown/lib/format";
+import { bucketLabel, replaceTourRows, targetFor, tourRows } from "@/features/stemtown/lib/dashboard-data";
+import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
 import {
   clearImportedTours,
   downloadTourTemplate,
@@ -408,6 +408,25 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     return m;
   }, [recRows]);
   const doneTotal = recCounts["Đã nghiệm thu"] + recCounts["Chưa nghiệm thu"];
+  const recSplit = useMemo(() => {
+    const dt: Record<RecStatus, number> = { "Chưa đi": 0, "Đã nghiệm thu": 0, "Chưa nghiệm thu": 0 };
+    const hs: Record<RecStatus, number> = { "Chưa đi": 0, "Đã nghiệm thu": 0, "Chưa nghiệm thu": 0 };
+    recRows.forEach((r) => {
+      const s = reconcileStatus(r);
+      dt[s] += r.revenue;
+      hs[s] += r.students;
+    });
+    return { dt, hs };
+  }, [recRows]);
+  /** % đạt Target + Còn lại — Target B2B lấy từ sheet KPI (data/kpi.json), theo đúng khoảng ngày đang lọc. */
+  const targetDT = useMemo(() => targetFor("B2B", range.from, range.to, "revenue"), [range]);
+  const targetHS = useMemo(() => targetFor("B2B", range.from, range.to, "students"), [range]);
+  const targetSub = (actual: number, target: number | null, fmt: (n: number) => string): SubMetric => {
+    if (target === null || target <= 0) return { label: "% đạt Target", value: "Chưa đủ dữ liệu" };
+    const pct = (actual / target) * 100;
+    const remain = Math.max(0, target - actual);
+    return { label: "% đạt Target", value: formatPercent(pct), belowText: `Target ${fmt(target)} · Còn ${fmt(remain)}` };
+  };
   const backlog = useMemo(
     () =>
       recRows
@@ -488,10 +507,48 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Doanh thu dự kiến" value={tot.n ? formatNumber(tot.dt / 1_000_000, tot.dt < 100_000_000 ? 1 : 0) : "—"} unit="tr" change={null} />
-        <KpiCard label="Số lượt tour dự kiến" value={formatNumber(tot.n)} unit="tour" change={null} />
-        <KpiCard label="Tổng số học sinh dự kiến" value={tot.n ? formatNumber(tot.hs) : "—"} unit="HS" change={null} />
-        <KpiCard label="Số Sales phụ trách" value={formatNumber(saleCount)} unit="sale" change={null} />
+        <KpiCard
+          label="Doanh thu dự kiến"
+          value={tot.n ? formatNumber(tot.dt / 1_000_000, tot.dt < 100_000_000 ? 1 : 0) : "—"}
+          unit="tr"
+          change={null}
+          subMetrics={[
+            { label: "Đã nghiệm thu", value: fTr(recSplit.dt["Đã nghiệm thu"]) },
+            { label: "Chưa nghiệm thu", value: fTr(recSplit.dt["Chưa nghiệm thu"]), valueStyle: recSplit.dt["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+            targetSub(tot.dt, targetDT, fTr),
+          ]}
+        />
+        <KpiCard
+          label="Số lượt tour dự kiến"
+          value={formatNumber(tot.n)}
+          unit="tour"
+          change={null}
+          subMetrics={[
+            { label: "Đã đi", value: formatNumber(doneTotal) },
+            { label: "Chưa đi", value: formatNumber(recCounts["Chưa đi"]) },
+          ]}
+        />
+        <KpiCard
+          label="Tổng số học sinh dự kiến"
+          value={tot.n ? formatNumber(tot.hs) : "—"}
+          unit="HS"
+          change={null}
+          subMetrics={[
+            { label: "Đã nghiệm thu", value: formatNumber(recSplit.hs["Đã nghiệm thu"]) },
+            { label: "Chưa nghiệm thu", value: formatNumber(recSplit.hs["Chưa nghiệm thu"]), valueStyle: recSplit.hs["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+            targetSub(tot.hs, targetHS, (n) => `${formatNumber(Math.round(n))} HS`),
+          ]}
+        />
+        <KpiCard
+          label="Số Sales phụ trách"
+          value={formatNumber(saleCount)}
+          unit="sale"
+          change={null}
+          subMetrics={[
+            { label: "Đã nghiệm thu", value: formatNumber(recCounts["Đã nghiệm thu"]) },
+            { label: "Chưa nghiệm thu", value: formatNumber(recCounts["Chưa nghiệm thu"]), valueStyle: recCounts["Chưa nghiệm thu"] > 0 ? { color: WARN } : undefined },
+          ]}
+        />
       </div>
 
       {/* Hàng 1: Xu hướng theo thời gian (toggle 3 chỉ số) + Đối chiếu tiến độ/nghiệm thu */}

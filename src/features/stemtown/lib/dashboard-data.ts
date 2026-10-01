@@ -1,6 +1,7 @@
 import rawB2C from "@/features/stemtown/data/b2c.json";
 import rawB2B from "@/features/stemtown/data/b2b.json";
 import rawTours from "@/features/stemtown/data/b2b-tours.json";
+import rawKpi from "@/features/stemtown/data/kpi.json";
 import type { SubMetric } from "@/features/stemtown/components/kpi";
 import { formatPercent, formatTargetShort } from "@/features/stemtown/lib/format";
 
@@ -771,7 +772,7 @@ export function mapKpi(raw: Record<string, unknown>[]): KpiTargetRow[] {
   return out;
 }
 
-const kpiSampleRaw: Record<string, unknown>[] = [];
+const kpiSampleRaw = rawKpi as Record<string, unknown>[];
 
 let kpiBaseRaw: Record<string, unknown>[] = kpiSampleRaw;
 
