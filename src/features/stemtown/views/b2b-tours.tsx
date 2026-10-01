@@ -778,8 +778,14 @@ const fmtMetric = (v: number, metric: HeatMetric): string => (metric === "dt" ? 
 
 function TourSchedule({ items, today, active }: { items: TourItem[]; today: string; active: boolean }) {
   const curMonth = today.slice(0, 7);
-  const dated = useMemo(() => items.filter((r) => r.hasDate && r.date), [items]);
-  const undated = useMemo(() => items.filter((r) => !r.hasDate).sort((a, b) => a.month.localeCompare(b.month)), [items]);
+  /** "Đã đi" = ngày tour < hôm nay; "Chưa đi" = từ hôm nay trở đi hoặc chưa có ngày cụ thể. */
+  const [statuses, setStatuses] = useState<Set<"Đã đi" | "Chưa đi">>(() => new Set());
+  const passStatus = useCallback(
+    (r: TourItem) => statuses.size === 0 || statuses.has(r.hasDate && r.date && r.date < today ? "Đã đi" : "Chưa đi"),
+    [statuses, today],
+  );
+  const dated = useMemo(() => items.filter((r) => r.hasDate && r.date && passStatus(r)), [items, passStatus]);
+  const undated = useMemo(() => items.filter((r) => !r.hasDate && passStatus(r)).sort((a, b) => a.month.localeCompare(b.month)), [items, passStatus]);
   /** Toàn bộ khoảng ngày có dữ liệu — mặc định hiển thị đầy đủ các tháng (cuộn dọc trong khung heatmap). */
   const fullRange = useMemo<DateRange>(() => {
     const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
@@ -941,7 +947,47 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
 
   return (
     <div className="space-y-4">
-      <TourRangeFilter range={range} setRange={setRange} today={today} resetTo={fullRange} onReset={() => setMScope("all")} />
+      <TourRangeFilter
+        range={range}
+        setRange={setRange}
+        today={today}
+        resetTo={fullRange}
+        onReset={() => {
+          setMScope("all");
+          setStatuses(new Set());
+        }}
+        extra={
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tiến độ</span>
+            <div className="flex flex-wrap gap-1">
+              {(["Đã đi", "Chưa đi"] as const).map((s) => {
+                const on = statuses.has(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setStatuses((cur) => {
+                        const n = new Set(cur);
+                        if (n.has(s)) n.delete(s);
+                        else n.add(s);
+                        return n;
+                      })
+                    }
+                    className={cn(
+                      "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+                      on ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary",
+                    )}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        }
+      />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Doanh thu dự kiến" value={mTot.n ? formatNumber(mTot.dt / 1_000_000, mTot.dt < 100_000_000 ? 1 : 0) : "—"} unit="tr" change={null} />
         <KpiCard label={mScope === "week" ? "Số tour trong tuần" : mScope === "month" ? "Số tour trong tháng" : "Số tour"} value={formatNumber(mTot.n)} unit="tour" change={null} />
