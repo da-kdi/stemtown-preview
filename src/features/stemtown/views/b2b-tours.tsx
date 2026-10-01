@@ -229,7 +229,6 @@ function TourRangeFilter({
 /* Màu cố định theo chỉ số ở tab Tổng quan */
 const OC = { dt: CHART_COLORS.primary, tour: CHART_COLORS.dark, hs: CHART_COLORS.support } as const;
 const SALE_NONE = "(Chưa có sale)";
-const BAND_ORDER = ["< 150k", "151k – 200k", "201k – 250k", "251k – 300k", "> 300k"];
 
 /** Cấp học suy từ tên trường — cùng cách chia với phần Nghiệm thu (segmentOf/schoolLevel). */
 function levelOfTour(r: TourItem): string {
@@ -243,17 +242,6 @@ function levelOfTour(r: TourItem): string {
   if (up.includes("THCS") || up.includes("TRUNG HỌC CƠ SỞ")) return "THCS";
   if (up.includes("THPT")) return "THPT";
   return "Khác";
-}
-
-/** Phân khúc đơn giá học sinh (cột Giá vé) — cùng ngưỡng với phần Nghiệm thu. */
-function bandOfTour(r: TourItem): string | null {
-  const p = r.price;
-  if (!p || p <= 0) return null;
-  if (p < 150_000) return BAND_ORDER[0] as string;
-  if (p <= 200_000) return BAND_ORDER[1] as string;
-  if (p <= 250_000) return BAND_ORDER[2] as string;
-  if (p <= 300_000) return BAND_ORDER[3] as string;
-  return BAND_ORDER[4] as string;
 }
 
 type Grp = { name: string; n: number; hs: number; dt: number };
@@ -287,11 +275,10 @@ function GroupTooltip({ g, tot, label }: { g: { n: number; hs: number; dt: numbe
   );
 }
 
-type DimMetric = "sale" | "level" | "band" | "school";
+type DimMetric = "sale" | "level" | "school";
 const DIM_CFG: Record<DimMetric, { label: string; keyFn: (r: TourItem) => string | null; top?: number; order?: string[] }> = {
   sale: { label: "Sales", keyFn: (r) => r.sale ?? SALE_NONE, top: 10 },
   level: { label: "Cấp học", keyFn: levelOfTour },
-  band: { label: "Phân khúc giá", keyFn: bandOfTour, order: BAND_ORDER },
   school: { label: "Trường", keyFn: (r) => r.schoolName, top: 10 },
 };
 type TimeMetric = "dt" | "n" | "hs";
@@ -601,8 +588,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
         </Panel>
       </div>
 
-      {/* Hàng 2: Cơ cấu số tour — 4 chart riêng theo 4 trường khác nhau (không gộp vì không cùng phân cấp) */}
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* Hàng 2: Cơ cấu số tour — 3 chart riêng theo 3 trường khác nhau (không gộp vì không cùng phân cấp) */}
+      <div className="grid gap-4 xl:grid-cols-3">
         {(Object.keys(DIM_CFG) as DimMetric[]).map((k) => {
           const data = dimDataByKey[k];
           const tot2 = dimTotByKey[k];
