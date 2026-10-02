@@ -20,7 +20,7 @@ import { FactTable, type Column } from "@/features/stemtown/components/fact-tabl
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
-import { bucketLabel, replaceTourRows, targetFor, targetForBucket, tourRows } from "@/features/stemtown/lib/dashboard-data";
+import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
 import {
   clearImportedTours,
@@ -292,8 +292,16 @@ const TIME_CFG: Record<TimeMetric, { label: string; color: string; fmt: (v: numb
 const REC_ORDER: RecStatus[] = ["Chưa đi", "Chưa nghiệm thu", "Đã nghiệm thu"];
 const REC_COLOR: Record<RecStatus, string> = { "Chưa đi": CHART_COLORS.axis, "Chưa nghiệm thu": WARN, "Đã nghiệm thu": "#2e9e5b" };
 
-type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus };
+type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus; timeBucket?: string };
 const CHART_H = 250;
+const TIME_UNITS: { key: TimeUnit; label: string }[] = [
+  { key: "day", label: "Ngày" },
+  { key: "weekday", label: "Thứ" },
+  { key: "week", label: "Tuần" },
+  { key: "month", label: "Tháng" },
+  { key: "quarter", label: "Quý" },
+  { key: "year", label: "Năm" },
+];
 
 function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const refYear = today.slice(0, 4);
@@ -305,6 +313,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const [statuses, setStatuses] = useState<Set<RecStatus>>(() => new Set());
   const [sel, setSel] = useState<OvSel>({});
   const [timeMetric, setTimeMetric] = useState<TimeMetric>("dt");
+  const [timeUnit, setTimeUnit] = useState<TimeUnit>("month");
   const toggle = <K extends keyof OvSel>(k: K, v: OvSel[K]) => setSel((s) => (s[k] === v ? { ...s, [k]: undefined } : { ...s, [k]: v }));
 
   const base = useMemo(
@@ -322,9 +331,10 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           (skip.includes("month") || !sel.month || r.month === sel.month) &&
           (skip.includes("weekday") || sel.weekday === undefined || weekdayIdx(r.date as string) === sel.weekday) &&
           (skip.includes("dimVal") || !sel.dimKey || DIM_CFG[sel.dimKey].keyFn(r) === sel.dimVal) &&
-          (skip.includes("rec") || !sel.rec || reconcileStatus(r) === sel.rec),
+          (skip.includes("rec") || !sel.rec || reconcileStatus(r) === sel.rec) &&
+          (skip.includes("timeBucket") || !sel.timeBucket || (r.date && bucketOf(r.date, timeUnit) === sel.timeBucket)),
       ),
-    [base, sel],
+    [base, sel, timeUnit],
   );
 
   const rows = useMemo(() => rowsExcept(), [rowsExcept]);
@@ -336,23 +346,30 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     return ms.length ? monthRange(ms[0] as string, ms[ms.length - 1] as string) : [];
   }, [base]);
 
-  /** 1 chart theo thời gian cho cả 3 chỉ số — toggle đổi dataKey, không đổi trục/loại chart. */
+  /** Danh sách bucket theo Đơn vị thời gian đang chọn (Ngày/Thứ/Tuần/Tháng/Quý/Năm) — mặc định Tháng. */
+  const timeBuckets = useMemo(() => {
+    const rs = rowsExcept("timeBucket");
+    return sortBuckets(Array.from(new Set(rs.filter((r) => r.date).map((r) => bucketOf(r.date as string, timeUnit)))), timeUnit);
+  }, [rowsExcept, timeUnit]);
+
+  /** 1 chart theo thời gian cho cả 3 chỉ số — toggle đổi dataKey, không đổi trục/loại chart.
+   *  Bấm "Đơn vị thời gian" đổi cách gộp cột (break) mà không đổi loại chart. */
   const timeData = useMemo(() => {
-    const rs = rowsExcept("month", "weekday");
-    return monthKeys.map((m) => {
-      const l = rs.filter((r) => r.month === m);
+    const rs = rowsExcept("timeBucket");
+    return timeBuckets.map((b) => {
+      const l = rs.filter((r) => r.date && bucketOf(r.date, timeUnit) === b);
       const t = totalOf(l);
       return {
-        m,
-        label: monthShort(m, refYear),
+        m: b,
+        label: bucketLabel(b, timeUnit),
         dt: t.dt,
         n: t.n,
         hs: t.hs,
-        dtTarget: targetForBucket("B2B", m, "month", "revenue"),
-        hsTarget: targetForBucket("B2B", m, "month", "students"),
+        dtTarget: targetForBucket("B2B", b, timeUnit, "revenue"),
+        hsTarget: targetForBucket("B2B", b, timeUnit, "students"),
       };
     });
-  }, [rowsExcept, monthKeys, refYear]);
+  }, [rowsExcept, timeBuckets, timeUnit]);
   const timeTot = useMemo(() => timeData.reduce((a, r) => ({ dt: a.dt + r.dt, n: a.n + r.n, hs: a.hs + r.hs }), { dt: 0, n: 0, hs: 0 }), [timeData]);
 
   /** 4 chart cơ cấu RIÊNG BIỆT — Sales/Cấp học/Phân khúc giá/Trường là 4 trường dữ liệu khác nhau,
@@ -458,6 +475,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
       sel.weekday !== undefined ? ["weekday", `Thứ: ${WEEKDAYS[sel.weekday]}`] : null,
       sel.dimKey ? ["dimVal", `${DIM_CFG[sel.dimKey].label}: ${sel.dimVal}`] : null,
       sel.rec ? ["rec", `Trạng thái: ${sel.rec}`] : null,
+      sel.timeBucket ? ["timeBucket", `${TIME_UNITS.find((u) => u.key === timeUnit)?.label}: ${bucketLabel(sel.timeBucket, timeUnit)}`] : null,
     ] as ([keyof OvSel, string] | null)[]
   ).filter((x): x is [keyof OvSel, string] => x !== null);
 
@@ -585,6 +603,21 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
               </button>
             ))}
           </div>
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">Đơn vị thời gian:</span>
+            <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+              {TIME_UNITS.map((u) => (
+                <button
+                  key={u.key}
+                  type="button"
+                  onClick={() => setTimeUnit(u.key)}
+                  className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", timeUnit === u.key ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60")}
+                >
+                  {u.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={CHART_H}>
             <ComposedChart data={timeData} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
@@ -599,7 +632,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                   const sum = timeTot[timeMetric];
                   const target = timeMetric === "dt" ? row.dtTarget : timeMetric === "hs" ? row.hsTarget : null;
                   return (
-                    <TooltipBox label={monthLabel(row.m)}>
+                    <TooltipBox label={row.label}>
                       <TooltipRow color={TIME_CFG[timeMetric].color} name={TIME_CFG[timeMetric].label} value={v} unit={timeMetric === "dt" ? undefined : timeMetric === "n" ? "tour" : "HS"} share={sum ? (v / sum) * 100 : undefined} />
                       {target !== null && (
                         <TooltipRow color={CHART_COLORS.accent} name="Target tháng" value={target} unit={timeMetric === "dt" ? undefined : "HS"} share={target ? (v / target) * 100 : undefined} />
@@ -609,9 +642,9 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                   );
                 }}
               />
-              <Bar dataKey={timeMetric} fill={TIME_CFG[timeMetric].color} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+              <Bar dataKey={timeMetric} fill={TIME_CFG[timeMetric].color} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("timeBucket", d?.m)}>
                 {timeData.map((r) => (
-                  <Cell key={r.m} fill={TIME_CFG[timeMetric].color} fillOpacity={sel.month && sel.month !== r.m ? 0.3 : 1} />
+                  <Cell key={r.m} fill={TIME_CFG[timeMetric].color} fillOpacity={sel.timeBucket && sel.timeBucket !== r.m ? 0.3 : 1} />
                 ))}
                 <LabelList dataKey={timeMetric} position="top" formatter={(v: number) => (v === 0 ? "" : TIME_CFG[timeMetric].fmt(v))} style={{ fontSize: 10, fill: CHART_COLORS.axis }} />
               </Bar>
