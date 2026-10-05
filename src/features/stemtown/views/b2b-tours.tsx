@@ -19,6 +19,7 @@ import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
+import { TourSankey } from "@/features/stemtown/views/tour-sankey";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
@@ -724,6 +725,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           </p>
         </Panel>
       </div>
+
+      <TourSankey rows={rows} />
 
       {/* Hàng 2: Cơ cấu số tour — 3 chart riêng theo 3 trường khác nhau (không gộp vì không cùng phân cấp) */}
       <div className="grid gap-4 xl:grid-cols-3">
