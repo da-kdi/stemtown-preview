@@ -42,7 +42,6 @@ import {
   enrichTours,
   hhmm,
   monthLabel,
-  monthRange,
   monthShort,
   mondayOf,
   quickRange,
@@ -341,11 +340,6 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const tot = useMemo(() => totalOf(rows), [rows]);
   const saleCount = useMemo(() => new Set(rows.filter((r) => r.sale).map((r) => r.sale)).size, [rows]);
 
-  const monthKeys = useMemo(() => {
-    const ms = Array.from(new Set(base.map((r) => r.month))).sort();
-    return ms.length ? monthRange(ms[0] as string, ms[ms.length - 1] as string) : [];
-  }, [base]);
-
   /** Danh sách bucket theo Đơn vị thời gian đang chọn (Ngày/Thứ/Tuần/Tháng/Quý/Năm) — mặc định Tháng. */
   const timeBuckets = useMemo(() => {
     const rs = rowsExcept("timeBucket");
@@ -394,21 +388,22 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     return out;
   }, [dimRows]);
 
+  /** HS dự kiến vs thực tế — dùng chung Đơn vị thời gian của cả tab; bấm cột lọc chéo theo đúng bucket. */
   const planAct = useMemo(() => {
-    const rs = rowsExcept("month", "weekday");
-    return monthKeys.map((m) => {
-      const l = rs.filter((r) => r.month === m);
+    const rs = rowsExcept("timeBucket");
+    return timeBuckets.map((b) => {
+      const l = rs.filter((r) => r.date && bucketOf(r.date, timeUnit) === b);
       const w = l.filter((r) => r.actualStudents !== null);
       return {
-        m,
-        label: monthShort(m, refYear),
+        m: b,
+        label: bucketLabel(b, timeUnit),
         n: l.length,
         k: w.length,
         plan: l.length ? l.reduce((a, r) => a + r.students, 0) : null,
         act: w.length ? w.reduce((a, r) => a + (r.actualStudents ?? 0), 0) : null,
       };
     });
-  }, [rowsExcept, monthKeys, refYear]);
+  }, [rowsExcept, timeBuckets, timeUnit]);
 
   /** Heatmap Số tour theo Tháng (hàng) × Thứ (cột). */
   const heat = useMemo(() => {
@@ -481,7 +476,32 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
 
   const empty = (v: number) => (v === 0 ? "" : formatNumber(v));
 
-  const extraFilter = (
+  const unitFilter = (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Đơn vị thời gian</span>
+      <div className="flex flex-wrap gap-1">
+        {TIME_UNITS.map((u) => (
+          <button
+            key={u.key}
+            type="button"
+            aria-pressed={timeUnit === u.key}
+            onClick={() => {
+              setTimeUnit(u.key);
+              setSel((cur) => ({ ...cur, timeBucket: undefined }));
+            }}
+            className={cn(
+              "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+              timeUnit === u.key ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            {u.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const statusFilter = (
     <div className="flex flex-col gap-1">
       <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tiến độ (chọn nhiều)</span>
       <div className="flex flex-wrap gap-1">
@@ -512,6 +532,12 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
       </div>
     </div>
   );
+  const extraFilter = (
+    <>
+      {unitFilter}
+      {statusFilter}
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -523,6 +549,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
         onReset={() => {
           setStatuses(new Set());
           setSel({});
+          setTimeUnit("month");
         }}
         extra={extraFilter}
       />
@@ -602,21 +629,6 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                 {TIME_CFG[k].label.replace(" theo thời gian", "").replace(" dự kiến", "")}
               </button>
             ))}
-          </div>
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">Đơn vị thời gian:</span>
-            <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-              {TIME_UNITS.map((u) => (
-                <button
-                  key={u.key}
-                  type="button"
-                  onClick={() => setTimeUnit(u.key)}
-                  className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", timeUnit === u.key ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60")}
-                >
-                  {u.label}
-                </button>
-              ))}
-            </div>
           </div>
           <ResponsiveContainer width="100%" height={CHART_H}>
             <ComposedChart data={timeData} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
@@ -748,7 +760,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
 
       {/* Hàng 3: HS dự kiến vs thực tế + Heatmap Tháng × Thứ */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="HS dự kiến và HS thực tế theo thời gian" subtitle="Tháng chưa có SL TT chỉ hiện cột dự kiến." code="CH-TOUR-O4" isEmpty={planAct.every((r) => r.plan === null)}>
+        <Panel title="HS dự kiến và HS thực tế theo thời gian" subtitle="Kỳ chưa có SL TT chỉ hiện cột dự kiến." code="CH-TOUR-O4" isEmpty={planAct.every((r) => r.plan === null)}>
           <ResponsiveContainer width="100%" height={CHART_H}>
             <BarChart data={planAct} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
@@ -761,7 +773,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                   const r = payload[0]?.payload as (typeof planAct)[number];
                   const planSum = planAct.reduce((a, x) => a + (x.plan ?? 0), 0);
                   return (
-                    <TooltipBox label={monthLabel(r.m)}>
+                    <TooltipBox label={r.label}>
                       <TooltipRow color={OC.hs} name="HS dự kiến" value={r.plan ?? 0} unit="HS" share={planSum ? ((r.plan ?? 0) / planSum) * 100 : undefined} />
                       {r.k ? (
                         <TooltipRow color={OC.tour} name="HS thực tế (SL TT)" value={r.act ?? 0} unit="HS" share={r.plan ? ((r.act ?? 0) / r.plan) * 100 : undefined} />
@@ -769,17 +781,17 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                         <p className="text-muted-foreground">Chưa có SL TT</p>
                       )}
                       <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
-                        Tổng dự kiến các tháng: {formatNumber(planSum)} HS{r.k ? `, ${r.k}/${r.n} tour có SL TT` : ""}
+                        Tổng dự kiến các kỳ: {formatNumber(planSum)} HS{r.k ? `, ${r.k}/${r.n} tour có SL TT` : ""}
                       </p>
                     </TooltipBox>
                   );
                 }}
               />
               <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="plan" name="HS dự kiến" fill={OC.hs} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+              <Bar dataKey="plan" name="HS dự kiến" fill={OC.hs} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("timeBucket", d?.m)}>
                 <LabelList dataKey="plan" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
               </Bar>
-              <Bar dataKey="act" name="HS thực tế (SL TT)" fill={OC.tour} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("month", d?.m)}>
+              <Bar dataKey="act" name="HS thực tế (SL TT)" fill={OC.tour} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("timeBucket", d?.m)}>
                 <LabelList dataKey="act" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
               </Bar>
             </BarChart>
