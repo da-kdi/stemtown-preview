@@ -21,17 +21,17 @@ type Sel = { kind: Kind; id: string } | null;
 const UNLINKED = "__unlinked";
 const OTH_C = "__othC";
 const OTH_U = "__othU";
-const TOP_C = 6;
-const TOP_U = 8;
-const W = 900;
+const TOP_C = 5;
+const TOP_U = 7;
+const W = 620;
 const COLS = [
-  { x: 0, w: 240 },
-  { x: 330, w: 240 },
-  { x: 660, w: 240 },
+  { x: 0, w: 170 },
+  { x: 225, w: 170 },
+  { x: 450, w: 170 },
 ];
-const Y0 = 50;
-const GAP = 8;
-const MINH = 44;
+const Y0 = 48;
+const GAP = 6;
+const MINH = 38;
 
 const STATUS_ORDER: RecStatus[] = ["Đã nghiệm thu", "Chưa nghiệm thu", "Chưa đi"];
 const STATUS_COLOR: Record<RecStatus, string> = { "Đã nghiệm thu": "#2e9e5b", "Chưa nghiệm thu": CHART_COLORS.accent, "Chưa đi": CHART_COLORS.axis };
@@ -178,7 +178,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
     const ss: Node[] = STATUS_ORDER.filter((s) => fS.has(s)).map((s) => mk(s, "s", s, fS.get(s)!, 2, STATUS_COLOR[s]));
 
     const need = (n: number) => n * MINH + Math.max(0, n - 1) * GAP;
-    const AH = Math.max(300, need(cs.length), need(us.length), need(ss.length));
+    const AH = Math.max(260, need(cs.length), need(us.length), need(ss.length));
     const place = (list: Node[]) => {
       const tot = list.reduce((a, n) => a + n.v, 0);
       const k = tot > 0 ? (AH - GAP * (list.length - 1)) / tot : 0;
@@ -263,7 +263,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
   const move = (e: React.MouseEvent, t: { node?: Node; link?: LinkG }) => {
     const r = wrap.current?.getBoundingClientRect();
     if (!r) return;
-    setTip({ x: Math.min(e.clientX - r.left + 14, r.width - 250), y: e.clientY - r.top + 14, ...t });
+    setTip({ x: Math.max(4, Math.min(e.clientX - r.left + 14, r.width - 250)), y: e.clientY - r.top + 14, ...t });
   };
 
   const sub = (n: Node) =>
@@ -299,8 +299,8 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
 
   return (
     <Panel
-      title="Khách hàng nghiệm thu → Đơn vị sử dụng → Trạng thái"
-      subtitle={`Bấm khách hàng để xem các trường trực thuộc, bấm trường để truy ngược khách hàng. Chỉ ${formatNumber(linkedCount)}/${formatNumber(allPaths.length)} tour đã gắn biên bản mới biết khách hàng.`}
+      title="Mạng lưới Khách hàng – Đơn vị sử dụng – Nghiệm thu"
+      subtitle={`Bấm khách hàng hoặc trường để lần theo quan hệ · ${formatNumber(linkedCount)}/${formatNumber(allPaths.length)} tour đã gắn biên bản`}
       code="CH-TOUR-O7"
       isEmpty={!model}
     >
@@ -351,15 +351,15 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
         <div ref={wrap} className={cn("relative", showAll && "max-h-[640px] overflow-y-auto")} onMouseLeave={() => setTip(null)}>
           <svg viewBox={`0 0 ${W} ${model.H}`} className="block w-full" role="img" aria-label="Sankey khách hàng nghiệm thu, đơn vị sử dụng, trạng thái nghiệm thu">
             {[
-              { x: COLS[0]!.x, t: "Khách hàng nghiệm thu", c: `${formatNumber(model.nCo)} công ty${model.nSch ? ` + ${formatNumber(model.nSch)} trường` : ""}` },
-              { x: COLS[1]!.x, t: "Đơn vị / trường sử dụng", c: `${formatNumber(model.nU)} đơn vị` },
-              { x: COLS[2]!.x, t: "Trạng thái nghiệm thu", c: STATUS_ORDER.map((s) => `${formatNumber(model.st[s])} ${STATUS_SHORT[s]}`).join(" / ") },
+              { x: COLS[0]!.x, a: "start" as const, t: "Khách hàng nghiệm thu", c: `${formatNumber(model.nCo)} công ty${model.nSch ? ` + ${formatNumber(model.nSch)} trường` : ""}` },
+              { x: COLS[1]!.x, a: "start" as const, t: "Đơn vị sử dụng", c: `${formatNumber(model.nU)} đơn vị` },
+              { x: W, a: "end" as const, t: "Trạng thái nghiệm thu", c: STATUS_ORDER.map((s) => `${formatNumber(model.st[s])} ${STATUS_SHORT[s]}`).join(" / ") },
             ].map((h) => (
               <g key={h.t}>
-                <text x={h.x} y={14} fontSize={12} style={{ fill: "var(--muted-foreground)" }}>
+                <text x={h.x} y={12} fontSize={11} textAnchor={h.a} style={{ fill: "var(--muted-foreground)" }}>
                   {h.t}
                 </text>
-                <text x={h.x} y={34} fontSize={14} fontWeight={600} style={{ fill: "var(--foreground)" }}>
+                <text x={h.x} y={30} fontSize={12.5} fontWeight={600} textAnchor={h.a} style={{ fill: "var(--foreground)" }}>
                   {h.c}
                 </text>
               </g>
@@ -380,7 +380,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
             {[...model.cs, ...model.us, ...model.ss].map((n) => {
               const on = !hl || n.flows.some((f) => hl.has(f));
               const picked = sel?.kind === n.kind && sel.id === n.id;
-              const chars = Math.floor((n.w - 18) / 6.6);
+              const chars = Math.floor((n.w - 16) / 6.1);
               return (
                 <g
                   key={`${n.kind}:${n.id}`}
@@ -391,11 +391,11 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
                   onMouseLeave={() => setTip(null)}
                 >
                   <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={3} fill={nodeFill(n)} stroke={picked ? "var(--foreground)" : n.kind === "u" ? "var(--border)" : n.color} strokeWidth={picked ? 2 : 0.8} />
-                  <text x={n.x + 9} y={n.y + n.h / 2 - 3} fontSize={13} fontWeight={600} style={{ fill: "var(--foreground)" }}>
+                  <text x={n.x + 8} y={n.y + n.h / 2 - 2} fontSize={12} fontWeight={600} style={{ fill: "var(--foreground)" }}>
                     {cut(n.name, chars)}
                   </text>
-                  <text x={n.x + 9} y={n.y + n.h / 2 + 14} fontSize={12} style={{ fill: "var(--muted-foreground)" }}>
-                    {cut(sub(n), chars + 4)}
+                  <text x={n.x + 8} y={n.y + n.h / 2 + 12} fontSize={10.5} style={{ fill: "var(--muted-foreground)" }}>
+                    {cut(sub(n), chars + 5)}
                   </text>
                 </g>
               );

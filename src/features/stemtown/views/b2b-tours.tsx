@@ -43,7 +43,6 @@ import {
   enrichTours,
   hhmm,
   monthLabel,
-  monthShort,
   mondayOf,
   quickRange,
   reconcileStatus,
@@ -277,11 +276,10 @@ function GroupTooltip({ g, tot, label }: { g: { n: number; hs: number; dt: numbe
   );
 }
 
-type DimMetric = "sale" | "level" | "school";
+type DimMetric = "sale" | "level";
 const DIM_CFG: Record<DimMetric, { label: string; keyFn: (r: TourItem) => string | null; top?: number; order?: string[] }> = {
   sale: { label: "Sales", keyFn: (r) => r.sale ?? SALE_NONE, top: 10 },
   level: { label: "Cấp học", keyFn: levelOfTour },
-  school: { label: "Trường", keyFn: (r) => r.schoolName, top: 10 },
 };
 type TimeMetric = "dt" | "n" | "hs";
 const TIME_CFG: Record<TimeMetric, { label: string; color: string; fmt: (v: number) => string }> = {
@@ -294,6 +292,8 @@ const REC_COLOR: Record<RecStatus, string> = { "Chưa đi": CHART_COLORS.axis, "
 
 type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus; timeBucket?: string };
 const CHART_H = 250;
+const WEEKDAY_FULL = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+const mmYYYY = (m: string) => `${m.slice(5, 7)}-${m.slice(0, 4)}`;
 const TIME_UNITS: { key: TimeUnit; label: string }[] = [
   { key: "day", label: "Ngày" },
   { key: "weekday", label: "Thứ" },
@@ -304,7 +304,6 @@ const TIME_UNITS: { key: TimeUnit; label: string }[] = [
 ];
 
 function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
-  const refYear = today.slice(0, 4);
   const defaultRange = useMemo<DateRange>(() => {
     const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
     return ds.length ? { from: ds[0] as string, to: ds[ds.length - 1] as string } : quickRange("fyThis", today);
@@ -467,8 +466,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
 
   const chips = (
     [
-      sel.month ? ["month", `Tháng: ${monthLabel(sel.month)}`] : null,
-      sel.weekday !== undefined ? ["weekday", `Thứ: ${WEEKDAYS[sel.weekday]}`] : null,
+      sel.month ? ["month", `Tháng: ${mmYYYY(sel.month)}`] : null,
+      sel.weekday !== undefined ? ["weekday", sel.weekday === 6 ? "Chủ nhật" : `Thứ ${sel.weekday + 2}`] : null,
       sel.dimKey ? ["dimVal", `${DIM_CFG[sel.dimKey].label}: ${sel.dimVal}`] : null,
       sel.rec ? ["rec", `Trạng thái: ${sel.rec}`] : null,
       sel.timeBucket ? ["timeBucket", `${TIME_UNITS.find((u) => u.key === timeUnit)?.label}: ${bucketLabel(sel.timeBucket, timeUnit)}`] : null,
@@ -726,9 +725,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
         </Panel>
       </div>
 
-      <TourSankey rows={rows} />
-
-      {/* Hàng 2: Cơ cấu số tour — 3 chart riêng theo 3 trường khác nhau (không gộp vì không cùng phân cấp) */}
+      {/* Hàng 2: Cơ cấu số tour (Sales, Cấp học) + HS dự kiến vs thực tế */}
       <div className="grid gap-4 xl:grid-cols-3">
         {(Object.keys(DIM_CFG) as DimMetric[]).map((k) => {
           const data = dimDataByKey[k];
@@ -759,10 +756,6 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
             </Panel>
           );
         })}
-      </div>
-
-      {/* Hàng 3: HS dự kiến vs thực tế + Heatmap Tháng × Thứ */}
-      <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="HS dự kiến và HS thực tế theo thời gian" subtitle="Kỳ chưa có SL TT chỉ hiện cột dự kiến." code="CH-TOUR-O4" isEmpty={planAct.every((r) => r.plan === null)}>
           <ResponsiveContainer width="100%" height={CHART_H}>
             <BarChart data={planAct} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
@@ -801,14 +794,19 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           </ResponsiveContainer>
         </Panel>
 
+      </div>
+
+      {/* Hàng 3: Mạng lưới khách hàng (Sankey) + Heatmap Tháng × Thứ */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <TourSankey rows={rows} />
         <Panel title="Số tour theo Tháng × Thứ" subtitle="Bấm ô, tên tháng hoặc tên thứ để lọc chéo." code="CH-TOUR-O5" isEmpty={heat.ms.length === 0}>
-          <div className="overflow-auto" style={{ maxHeight: CHART_H + 12 }}>
+          <div className="overflow-auto" style={{ maxHeight: 400 }}>
             <table className="w-full border-separate border-spacing-[3px] text-xs">
               <thead>
                 <tr>
                   <th className="sticky top-0 z-10 bg-card py-1 text-left font-semibold text-muted-foreground">Tháng</th>
-                  {WEEKDAYS.map((w, i) => (
-                    <th key={w} className="sticky top-0 z-10 bg-card py-1">
+                  {WEEKDAY_FULL.map((w, i) => (
+                    <th key={w} className="sticky top-0 z-10 whitespace-nowrap bg-card px-1 py-1">
                       <button type="button" onClick={() => toggle("weekday", i)} className={cn("font-semibold text-muted-foreground hover:text-foreground", sel.weekday === i && "text-primary")}>
                         {w}
                       </button>
@@ -821,7 +819,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                   <tr key={m}>
                     <th className="whitespace-nowrap text-left">
                       <button type="button" onClick={() => toggle("month", m)} className={cn("font-semibold hover:text-primary", sel.month === m && "text-primary")}>
-                        {monthShort(m, refYear)}
+                        {mmYYYY(m)}
                       </button>
                     </th>
                     {(heat.cnt.get(m) as number[]).map((v, i) => {
@@ -830,7 +828,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
                         <td key={i} className="p-0">
                           <button
                             type="button"
-                            title={`${monthLabel(m)} · ${WEEKDAYS[i]}: ${v} tour`}
+                            title={`${mmYYYY(m)} · ${WEEKDAY_FULL[i]}: ${v} tour`}
                             onClick={() => {
                               setSel((s) => (s.month === m && s.weekday === i ? { ...s, month: undefined, weekday: undefined } : { ...s, month: m, weekday: i }));
                             }}
