@@ -324,6 +324,25 @@ export function TourSankey({
     fl.forEach((f) => f.p.contracts.forEach((c) => set.add(c)));
     return { fl, v: fl.reduce((a, f) => a + val(f.p, metric), 0), n: fl.length, contracts: set.size };
   };
+  /** Nhóm "X … khác": đếm lại theo phần đang chọn, và chỉ liệt kê thành viên còn tour trong lựa chọn. */
+  const groupMembers = (n: Node): Member[] => {
+    if (!n.members) return [];
+    if (!hl) return n.members;
+    const m = new Map<string, { v: number; n: number }>();
+    selFl(n.flows).forEach((f) => {
+      const id = n.kind === "c" ? f.p.cid : f.p.uid;
+      const cur = m.get(id) ?? { v: 0, n: 0 };
+      cur.v += val(f.p, metric);
+      cur.n += 1;
+      m.set(id, cur);
+    });
+    return n.members.filter((x) => m.has(x.id)).map((x) => ({ ...x, v: m.get(x.id)!.v, n: m.get(x.id)!.n })).sort((a, b) => b.v - a.v);
+  };
+  const label = (n: Node) => {
+    if (!n.members || !hl) return n.name;
+    const k = groupMembers(n).length;
+    return k === 0 ? n.name : `${k} ${n.kind === "c" ? "khách hàng" : "đơn vị"} khác`;
+  };
   const head = useMemo(() => {
     if (!model) return null;
     const fl = hl ? model.flows.filter((f) => hl.has(f)) : model.flows;
@@ -371,7 +390,7 @@ export function TourSankey({
       m.set(id, (m.get(id) ?? 0) + 1);
     });
     const items = [...m.entries()]
-      .map(([id, n]) => ({ name: byId.get(`${groupKind}:${id}`)?.name ?? id, n }))
+      .map(([id, n]) => ({ name: (byId.has(`${groupKind}:${id}`) ? label(byId.get(`${groupKind}:${id}`)!) : id), n }))
       .sort((a, b) => b.n - a.n);
     const lead = sel.unit ? "Khách hàng nghiệm thu của" : sel.cust ? "Đơn vị sử dụng của" : "Đơn vị có tour";
     return { lead, name: sel.unit?.label ?? sel.cust?.label ?? sel.rec ?? "", items, total: hl.size };
@@ -485,7 +504,7 @@ export function TourSankey({
                 >
                   <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={3} fill={nodeFill(n)} stroke={isPicked ? "var(--foreground)" : n.kind === "u" ? "var(--border)" : n.color} strokeWidth={isPicked ? 2 : 0.8} />
                   <text x={n.x + 8} y={two ? n.y + n.h / 2 - 3 : n.y + n.h / 2 + 4} fontSize={FS_NAME} fontFamily={FONT} fontWeight={600} style={{ fill: "var(--foreground)" }}>
-                    {fit(n.name, room, FS_NAME, 600)}
+                    {fit(label(n), room, FS_NAME, 600)}
                   </text>
                   {two && (
                     <text x={n.x + 8} y={n.y + n.h / 2 + 11} fontSize={FS_SUB} fontFamily={FONT} style={{ fill: "var(--muted-foreground)" }}>
@@ -500,7 +519,7 @@ export function TourSankey({
           {tip && (tip.node || tip.link) && head && (
             <div className="pointer-events-none absolute z-20 w-60" style={{ left: tip.x, top: tip.y }}>
               {tip.node ? (
-                <TooltipBox label={tip.node.name}>
+                <TooltipBox label={label(tip.node)}>
                   {(() => {
                     const t = stat(tip.node);
                     const sc = statusCounts(t.fl);
@@ -518,9 +537,9 @@ export function TourSankey({
                       </>
                     );
                   })()}
-                  {tip.node.members && (
+                  {tip.node.members && groupMembers(tip.node).length > 0 && (
                     <div className="mt-1 border-t border-dashed border-border pt-1">
-                      {tip.node.members.slice(0, 8).map((m) => (
+                      {groupMembers(tip.node).slice(0, 8).map((m) => (
                         <p key={m.id} className="flex justify-between gap-2">
                           <span className="truncate">{m.name}</span>
                           <span className="tabular-nums">
@@ -528,12 +547,12 @@ export function TourSankey({
                           </span>
                         </p>
                       ))}
-                      {tip.node.members.length > 8 && <p className="text-muted-foreground">+{tip.node.members.length - 8} nữa</p>}
+                      {groupMembers(tip.node).length > 8 && <p className="text-muted-foreground">+{groupMembers(tip.node).length - 8} nữa</p>}
                     </div>
                   )}
                 </TooltipBox>
               ) : tip.link ? (
-                <TooltipBox label={`${tip.link.a.name} → ${tip.link.b.name}`}>
+                <TooltipBox label={`${label(tip.link.a)} → ${label(tip.link.b)}`}>
                   {(() => {
                     const fl = selFl(tip.link.flows);
                     const sc = statusCounts(fl);
