@@ -115,18 +115,19 @@ export function TourSankey({
   const [withUnlinked, setWithUnlinked] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [tip, setTip] = useState<{ x: number; y: number; node?: Node; link?: LinkG } | null>(null);
-  const wrap = useRef<HTMLDivElement>(null);
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(640);
   useEffect(() => {
-    const el = wrap.current;
+    // Panel gỡ children khi không có dữ liệu -> phần tử đo bị tạo lại; phải gắn lại observer theo element.
+    const el = wrapEl;
     if (!el) return;
     const upd = () => setW(Math.max(360, Math.floor(el.clientWidth)));
     upd();
     const ro = new ResizeObserver(upd);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [wrapEl]);
   const COLS = useMemo(() => layoutCols(W), [W]);
 
   const contractOf = useMemo(() => {
@@ -426,7 +427,7 @@ export function TourSankey({
         )}
       </div>
 
-      <div ref={wrap} className="w-full" />
+      <div ref={setWrapEl} className="w-full" />
       {model && (
         <div ref={box} className={cn("relative", showAll && "max-h-[640px] overflow-y-auto")} onMouseLeave={() => setTip(null)}>
           <svg width={W} height={model.H} viewBox={`0 0 ${W} ${model.H}`} className="block" role="img" aria-label="Sankey khách hàng nghiệm thu, đơn vị sử dụng, trạng thái nghiệm thu">
