@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CHART_COLORS, TooltipBox } from "@/features/stemtown/components/chart-kit";
 import { Panel } from "@/features/stemtown/components/panel";
@@ -23,15 +23,36 @@ const OTH_C = "__othC";
 const OTH_U = "__othU";
 const TOP_C = 5;
 const TOP_U = 7;
-const W = 620;
-const COLS = [
-  { x: 0, w: 170 },
-  { x: 225, w: 170 },
-  { x: 450, w: 170 },
-];
-const Y0 = 48;
+const FONT = '"Segoe UI", system-ui, sans-serif';
+const FS_NAME = 12;
+const FS_SUB = 11;
+const Y0 = 44;
 const GAP = 6;
-const MINH = 38;
+const MINH = 34;
+const UNLINKED_H = 30;
+const layoutCols = (W: number) => {
+  const w = Math.max(120, Math.min(210, Math.floor(W * 0.27)));
+  const gap = (W - 3 * w) / 2;
+  return [0, 1, 2].map((i) => ({ x: Math.round(i * (w + gap)), w }));
+};
+let ctx2d: CanvasRenderingContext2D | null | undefined;
+const textW = (t: string, size: number, weight: number) => {
+  if (ctx2d === undefined) ctx2d = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  if (!ctx2d) return t.length * size * 0.56;
+  ctx2d.font = `${weight} ${size}px ${FONT}`;
+  return ctx2d.measureText(t).width;
+};
+const fit = (t: string, max: number, size: number, weight: number) => {
+  if (textW(t, size, weight) <= max) return t;
+  let lo = 0;
+  let hi = t.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (textW(`${t.slice(0, mid).trimEnd()}…`, size, weight) <= max) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo <= 0 ? "" : `${t.slice(0, lo).trimEnd()}…`;
+};
 
 const STATUS_ORDER: RecStatus[] = ["Đã nghiệm thu", "Chưa nghiệm thu", "Chưa đi"];
 const STATUS_COLOR: Record<RecStatus, string> = { "Đã nghiệm thu": "#2e9e5b", "Chưa nghiệm thu": CHART_COLORS.accent, "Chưa đi": CHART_COLORS.axis };
@@ -44,7 +65,6 @@ const fmt = (v: number, m: Metric) =>
   m === "dt" ? `${formatNumber(v / 1_000_000, v < 100_000_000 ? 1 : 0)} tr` : m === "hs" ? `${formatNumber(v)} HS` : `${formatNumber(v)} tour`;
 const clean = (s: string) => s.replace(/\s+/g, " ").replace(/[.\s]+$/, "").trim();
 const keyOf = (s: string) => clean(s).toUpperCase();
-const cut = (s: string, w: number) => (s.length > w ? `${s.slice(0, Math.max(1, w - 1))}…` : s);
 const statusCounts = (fl: Flow[]) => {
   const o: Record<RecStatus, number> = { "Đã nghiệm thu": 0, "Chưa nghiệm thu": 0, "Chưa đi": 0 };
   fl.forEach((f) => {
@@ -74,6 +94,18 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
   const [sel, setSel] = useState<Sel>(null);
   const [tip, setTip] = useState<{ x: number; y: number; node?: Node; link?: LinkG } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(640);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const upd = () => setW(Math.max(360, Math.floor(el.clientWidth)));
+    upd();
+    const ro = new ResizeObserver(upd);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const COLS = useMemo(() => layoutCols(W), [W]);
 
   const contractOf = useMemo(() => {
     const live = new Map<string, string>();
@@ -180,11 +212,13 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
     const need = (n: number) => n * MINH + Math.max(0, n - 1) * GAP;
     const AH = Math.max(260, need(cs.length), need(us.length), need(ss.length));
     const place = (list: Node[]) => {
-      const tot = list.reduce((a, n) => a + n.v, 0);
-      const k = tot > 0 ? (AH - GAP * (list.length - 1)) / tot : 0;
+      const fixed = list.filter((n) => n.id === UNLINKED);
+      const flex = list.filter((n) => n.id !== UNLINKED);
+      const tot = flex.reduce((a, n) => a + n.v, 0);
+      const k = tot > 0 ? (AH - GAP * (list.length - 1) - fixed.length * UNLINKED_H) / tot : 0;
       let y = Y0;
       list.forEach((n) => {
-        n.h = Math.max(MINH, n.v * k);
+        n.h = n.id === UNLINKED ? UNLINKED_H : Math.max(MINH, n.v * k);
         n.y = y;
         y += n.h + GAP;
       });
@@ -251,7 +285,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
       restC: restC.length,
       restU: restU.length,
     };
-  }, [paths, metric, showAll]);
+  }, [paths, metric, showAll, COLS]);
 
   const hl = useMemo(() => {
     if (!sel || !model) return null;
@@ -261,7 +295,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
 
   const toggleSel = (kind: Kind, id: string) => setSel((cur) => (cur && cur.kind === kind && cur.id === id ? null : { kind, id }));
   const move = (e: React.MouseEvent, t: { node?: Node; link?: LinkG }) => {
-    const r = wrap.current?.getBoundingClientRect();
+    const r = box.current?.getBoundingClientRect();
     if (!r) return;
     setTip({ x: Math.max(4, Math.min(e.clientX - r.left + 14, r.width - 250)), y: e.clientY - r.top + 14, ...t });
   };
@@ -299,7 +333,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
 
   return (
     <Panel
-      title="Mạng lưới Khách hàng – Đơn vị sử dụng – Nghiệm thu"
+      title="Luồng nghiệm thu: Khách hàng → Đơn vị sử dụng → Trạng thái"
       subtitle={`Bấm khách hàng hoặc trường để lần theo quan hệ · ${formatNumber(linkedCount)}/${formatNumber(allPaths.length)} tour đã gắn biên bản`}
       code="CH-TOUR-O7"
       isEmpty={!model}
@@ -347,19 +381,20 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
         )}
       </div>
 
+      <div ref={wrap} className="w-full" />
       {model && (
-        <div ref={wrap} className={cn("relative", showAll && "max-h-[640px] overflow-y-auto")} onMouseLeave={() => setTip(null)}>
-          <svg viewBox={`0 0 ${W} ${model.H}`} className="block w-full" role="img" aria-label="Sankey khách hàng nghiệm thu, đơn vị sử dụng, trạng thái nghiệm thu">
+        <div ref={box} className={cn("relative", showAll && "max-h-[640px] overflow-y-auto")} onMouseLeave={() => setTip(null)}>
+          <svg width={W} height={model.H} viewBox={`0 0 ${W} ${model.H}`} className="block" role="img" aria-label="Sankey khách hàng nghiệm thu, đơn vị sử dụng, trạng thái nghiệm thu">
             {[
               { x: COLS[0]!.x, a: "start" as const, t: "Khách hàng nghiệm thu", c: `${formatNumber(model.nCo)} công ty${model.nSch ? ` + ${formatNumber(model.nSch)} trường` : ""}` },
               { x: COLS[1]!.x, a: "start" as const, t: "Đơn vị sử dụng", c: `${formatNumber(model.nU)} đơn vị` },
               { x: W, a: "end" as const, t: "Trạng thái nghiệm thu", c: STATUS_ORDER.map((s) => `${formatNumber(model.st[s])} ${STATUS_SHORT[s]}`).join(" / ") },
             ].map((h) => (
               <g key={h.t}>
-                <text x={h.x} y={12} fontSize={11} textAnchor={h.a} style={{ fill: "var(--muted-foreground)" }}>
+                <text x={h.x} y={12} fontSize={11} fontFamily={FONT} textAnchor={h.a} style={{ fill: "var(--muted-foreground)" }}>
                   {h.t}
                 </text>
-                <text x={h.x} y={30} fontSize={12.5} fontWeight={600} textAnchor={h.a} style={{ fill: "var(--foreground)" }}>
+                <text x={h.x} y={28} fontSize={12} fontFamily={FONT} fontWeight={600} textAnchor={h.a} style={{ fill: "var(--foreground)" }}>
                   {h.c}
                 </text>
               </g>
@@ -380,7 +415,8 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
             {[...model.cs, ...model.us, ...model.ss].map((n) => {
               const on = !hl || n.flows.some((f) => hl.has(f));
               const picked = sel?.kind === n.kind && sel.id === n.id;
-              const chars = Math.floor((n.w - 16) / 6.1);
+              const room = n.w - 16;
+              const two = n.h >= 32;
               return (
                 <g
                   key={`${n.kind}:${n.id}`}
@@ -391,12 +427,14 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
                   onMouseLeave={() => setTip(null)}
                 >
                   <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={3} fill={nodeFill(n)} stroke={picked ? "var(--foreground)" : n.kind === "u" ? "var(--border)" : n.color} strokeWidth={picked ? 2 : 0.8} />
-                  <text x={n.x + 8} y={n.y + n.h / 2 - 2} fontSize={12} fontWeight={600} style={{ fill: "var(--foreground)" }}>
-                    {cut(n.name, chars)}
+                  <text x={n.x + 8} y={two ? n.y + n.h / 2 - 3 : n.y + n.h / 2 + 4} fontSize={FS_NAME} fontFamily={FONT} fontWeight={600} style={{ fill: "var(--foreground)" }}>
+                    {fit(n.name, room, FS_NAME, 600)}
                   </text>
-                  <text x={n.x + 8} y={n.y + n.h / 2 + 12} fontSize={10.5} style={{ fill: "var(--muted-foreground)" }}>
-                    {cut(sub(n), chars + 5)}
-                  </text>
+                  {two && (
+                    <text x={n.x + 8} y={n.y + n.h / 2 + 11} fontSize={FS_SUB} fontFamily={FONT} style={{ fill: "var(--muted-foreground)" }}>
+                      {fit(sub(n), room, FS_SUB, 400)}
+                    </text>
+                  )}
                 </g>
               );
             })}
