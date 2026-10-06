@@ -5,6 +5,7 @@ import { Panel } from "@/features/stemtown/components/panel";
 import contractLookup from "@/features/stemtown/data/bienban-hopdong.json";
 import { COMPANY_COLOR, b2bRows } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber } from "@/features/stemtown/lib/format";
+import { isCompanyName } from "@/features/stemtown/lib/khach-hang";
 import { reconcileStatus, type RecStatus, type TourItem } from "@/features/stemtown/lib/tour-rules";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +14,12 @@ type CustFilter = "all" | "company" | "school";
 type Kind = "c" | "u" | "s";
 type Path = { cid: string; cname: string; isCo: boolean; uid: string; uname: string; s: RecStatus; dt: number; hs: number; contracts: string[] };
 type Flow = { p: Path; c: string; u: string; s: RecStatus };
-type Member = { name: string; v: number; n: number };
-type Node = { id: string; kind: Kind; name: string; flows: Flow[]; v: number; n: number; contracts: number; x: number; w: number; y: number; h: number; oo: number; io: number; color: string; members?: Member[] };
-type LinkG = { key: string; a: Node; b: Node; v: number; flows: Flow[]; d: string; color: string };
-type Sel = { kind: Kind; id: string } | null;
+type Member = { id: string; name: string; v: number; n: number };
+type Node = { id: string; kind: Kind; name: string; flows: Flow[]; v: number; n: number; contracts: number; keys: string[]; x: number; w: number; y: number; h: number; oo: number; io: number; color: string; members?: Member[] };
+type Geo = { x0: number; x1: number; y0: number; y1: number; ha: number; hb: number };
+type LinkG = { key: string; a: Node; b: Node; v: number; flows: Flow[]; geo: Geo; color: string };
+export type NodeSel = { keys: string[]; label: string };
+export type SankeySel = { cust?: NodeSel; unit?: NodeSel; rec?: RecStatus };
 
 const UNLINKED = "__unlinked";
 const OTH_C = "__othC";
@@ -73,25 +76,44 @@ const statusCounts = (fl: Flow[]) => {
   return o;
 };
 
-function ribbon(a: Node, b: Node, v: number): string {
+export const custKeyOf = (r: TourItem): string => {
+  const c = (r.tenKhachHang ?? "").split(";")[0]?.trim() ?? "";
+  return c ? keyOf(c) : UNLINKED;
+};
+export const unitKeyOf = (r: TourItem): string => keyOf(r.schoolName);
+
+const rpath = (g: Geo, f = 1) => {
+  const ha = g.ha * f;
+  const hb = g.hb * f;
+  const xm = (g.x0 + g.x1) / 2;
+  return `M${g.x0} ${g.y0} C${xm} ${g.y0} ${xm} ${g.y1} ${g.x1} ${g.y1} L${g.x1} ${g.y1 + hb} C${xm} ${g.y1 + hb} ${xm} ${g.y0 + ha} ${g.x0} ${g.y0 + ha} Z`;
+};
+
+function ribbon(a: Node, b: Node, v: number): Geo {
   const ha = (a.h * v) / a.v;
   const hb = (b.h * v) / b.v;
   const y0 = a.y + a.oo;
   const y1 = b.y + b.io;
   a.oo += ha;
   b.io += hb;
-  const x0 = a.x + a.w;
-  const x1 = b.x;
-  const xm = (x0 + x1) / 2;
-  return `M${x0} ${y0} C${xm} ${y0} ${xm} ${y1} ${x1} ${y1} L${x1} ${y1 + hb} C${xm} ${y1 + hb} ${xm} ${y0 + ha} ${x0} ${y0 + ha} Z`;
+  return { x0: a.x + a.w, x1: b.x, y0, y1, ha, hb };
 }
 
-export function TourSankey({ rows }: { rows: TourItem[] }) {
+export function TourSankey({
+  rows,
+  sel,
+  onToggle,
+  onClear,
+}: {
+  rows: TourItem[];
+  sel: SankeySel;
+  onToggle: (kind: Kind, v: NodeSel | RecStatus) => void;
+  onClear: () => void;
+}) {
   const [metric, setMetric] = useState<Metric>("dt");
   const [custFilter, setCustFilter] = useState<CustFilter>("all");
   const [withUnlinked, setWithUnlinked] = useState(true);
   const [showAll, setShowAll] = useState(false);
-  const [sel, setSel] = useState<Sel>(null);
   const [tip, setTip] = useState<{ x: number; y: number; node?: Node; link?: LinkG } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -120,10 +142,10 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
         const linked = cust !== "";
         const ids = (r.bienBanId ?? "").split(";").map((x) => x.trim()).filter(Boolean);
         return {
-          cid: linked ? keyOf(cust) : UNLINKED,
+          cid: custKeyOf(r),
           cname: linked ? clean(cust) : "Chưa gắn biên bản",
-          isCo: linked && cust.toLowerCase().includes("công ty"),
-          uid: keyOf(r.schoolName),
+          isCo: linked && isCompanyName(cust),
+          uid: unitKeyOf(r),
           uname: clean(r.schoolName),
           s: reconcileStatus(r),
           dt: r.revenue,
@@ -193,19 +215,19 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
     const mk = (id: string, kind: Kind, name: string, fl: Flow[], col: number, color: string, members?: Member[]): Node => {
       const set = new Set<string>();
       fl.forEach((f) => f.p.contracts.forEach((c) => set.add(c)));
-      return { id, kind, name, flows: fl, v: sum(fl.map((f) => f.p)), n: fl.length, contracts: set.size, x: COLS[col]!.x, w: COLS[col]!.w, y: 0, h: 0, oo: 0, io: 0, color, members };
+      return { id, kind, name, flows: fl, v: sum(fl.map((f) => f.p)), n: fl.length, contracts: set.size, x: COLS[col]!.x, w: COLS[col]!.w, y: 0, h: 0, oo: 0, io: 0, color, members, keys: members ? members.map((m) => m.id) : [id] };
     };
 
     const cs: Node[] = cRank
       .filter((x) => cKeep.has(x.id))
       .map((x) => mk(x.id, "c", x.ps[0]!.cname, fC.get(x.id)!, 0, x.ps[0]!.isCo ? COMPANY_COLOR : CHART_COLORS.primary));
     const restC = cRank.filter((x) => !cKeep.has(x.id));
-    if (restC.length) cs.push(mk(OTH_C, "c", `${restC.length} khách hàng khác`, fC.get(OTH_C)!, 0, CHART_COLORS.axis, restC.map((r) => ({ name: r.ps[0]!.cname, v: r.v, n: r.ps.length }))));
+    if (restC.length) cs.push(mk(OTH_C, "c", `${restC.length} khách hàng khác`, fC.get(OTH_C)!, 0, CHART_COLORS.axis, restC.map((r) => ({ id: r.id, name: r.ps[0]!.cname, v: r.v, n: r.ps.length }))));
     if (fC.has(UNLINKED)) cs.push(mk(UNLINKED, "c", "Chưa gắn biên bản", fC.get(UNLINKED)!, 0, CHART_COLORS.axis));
 
     const us: Node[] = uRank.filter((x) => uKeep.has(x.id)).map((x) => mk(x.id, "u", x.ps[0]!.uname, fU.get(x.id)!, 1, CHART_COLORS.dark));
     const restU = uRank.filter((x) => !uKeep.has(x.id));
-    if (restU.length) us.push(mk(OTH_U, "u", `${restU.length} đơn vị khác`, fU.get(OTH_U)!, 1, CHART_COLORS.axis, restU.map((r) => ({ name: r.ps[0]!.uname, v: r.v, n: r.ps.length }))));
+    if (restU.length) us.push(mk(OTH_U, "u", `${restU.length} đơn vị khác`, fU.get(OTH_U)!, 1, CHART_COLORS.axis, restU.map((r) => ({ id: r.id, name: r.ps[0]!.uname, v: r.v, n: r.ps.length }))));
 
     const ss: Node[] = STATUS_ORDER.filter((s) => fS.has(s)).map((s) => mk(s, "s", s, fS.get(s)!, 2, STATUS_COLOR[s]));
 
@@ -244,7 +266,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
           const b = uById.get(uid)!;
           const v = sum(fl.map((f) => f.p));
           if (v <= 0 || c.v <= 0 || b.v <= 0) return;
-          links.push({ key: `${c.id}|${uid}`, a: c, b, v, flows: fl, d: ribbon(c, b, v), color: c.color });
+          links.push({ key: `${c.id}|${uid}`, a: c, b, v, flows: fl, geo: ribbon(c, b, v), color: c.color });
         });
     });
     us.forEach((u) => {
@@ -260,7 +282,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
           const b = sById.get(s)!;
           const v = sum(fl.map((f) => f.p));
           if (v <= 0 || u.v <= 0 || b.v <= 0) return;
-          links.push({ key: `${u.id}|${s}`, a: u, b, v, flows: fl, d: ribbon(u, b, v), color: STATUS_COLOR[s as RecStatus] });
+          links.push({ key: `${u.id}|${s}`, a: u, b, v, flows: fl, geo: ribbon(u, b, v), color: STATUS_COLOR[s as RecStatus] });
         });
     });
 
@@ -288,37 +310,59 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
   }, [paths, metric, showAll, COLS]);
 
   const hl = useMemo(() => {
-    if (!sel || !model) return null;
-    const s = new Set(model.flows.filter((f) => (sel.kind === "c" ? f.c === sel.id : sel.kind === "u" ? f.u === sel.id : f.s === sel.id)));
-    return s.size ? s : null;
+    if (!model || (!sel.cust && !sel.unit && !sel.rec)) return null;
+    const cs = sel.cust ? new Set(sel.cust.keys) : null;
+    const us = sel.unit ? new Set(sel.unit.keys) : null;
+    return new Set(model.flows.filter((f) => (!cs || cs.has(f.p.cid)) && (!us || us.has(f.p.uid)) && (!sel.rec || f.s === sel.rec)));
   }, [sel, model]);
+  const selFl = (fl: Flow[]) => (hl ? fl.filter((f) => hl.has(f)) : fl);
+  const stat = (n: Node) => {
+    const fl = selFl(n.flows);
+    const set = new Set<string>();
+    fl.forEach((f) => f.p.contracts.forEach((c) => set.add(c)));
+    return { fl, v: fl.reduce((a, f) => a + val(f.p, metric), 0), n: fl.length, contracts: set.size };
+  };
+  const head = useMemo(() => {
+    if (!model) return null;
+    const fl = hl ? model.flows.filter((f) => hl.has(f)) : model.flows;
+    const cu = new Map<string, boolean>();
+    const uu = new Set<string>();
+    fl.forEach((f) => {
+      if (f.p.cid !== UNLINKED) cu.set(f.p.cid, f.p.isCo);
+      uu.add(f.p.uid);
+    });
+    const nCo = [...cu.values()].filter(Boolean).length;
+    return { nCo, nSch: cu.size - nCo, nU: uu.size, st: statusCounts(fl), total: fl.reduce((a, f) => a + val(f.p, metric), 0) };
+  }, [model, hl, metric]);
 
-  const toggleSel = (kind: Kind, id: string) => setSel((cur) => (cur && cur.kind === kind && cur.id === id ? null : { kind, id }));
   const move = (e: React.MouseEvent, t: { node?: Node; link?: LinkG }) => {
     const r = box.current?.getBoundingClientRect();
     if (!r) return;
     setTip({ x: Math.max(4, Math.min(e.clientX - r.left + 14, r.width - 250)), y: e.clientY - r.top + 14, ...t });
   };
 
-  const sub = (n: Node) =>
-    n.kind === "c"
-      ? n.id === UNLINKED
-        ? `${fmt(n.v, metric)} · ${formatNumber(n.n)} tour`
-        : `${fmt(n.v, metric)} · ${formatNumber(n.contracts)} HĐ / ${formatNumber(n.n)} tour`
+  const sub = (n: Node) => {
+    const t = stat(n);
+    if (hl && t.n === 0) return "—";
+    return n.kind === "c" && n.id !== UNLINKED
+      ? `${fmt(t.v, metric)} · ${formatNumber(t.contracts)} HĐ / ${formatNumber(t.n)} tour`
       : n.kind === "u"
-        ? `${fmt(n.v, metric)} · ${formatNumber(n.n)} lần tour`
-        : `${fmt(n.v, metric)} · ${formatNumber(n.n)} tour`;
+        ? `${fmt(t.v, metric)} · ${formatNumber(t.n)} lần tour`
+        : `${fmt(t.v, metric)} · ${formatNumber(t.n)} tour`;
+  };
+  const picked = (n: Node) => (n.kind === "c" ? sel.cust?.keys.join("|") === n.keys.join("|") : n.kind === "u" ? sel.unit?.keys.join("|") === n.keys.join("|") : sel.rec === n.id);
+  const clickNode = (n: Node) => (n.kind === "s" ? onToggle("s", n.id as RecStatus) : onToggle(n.kind, { keys: n.keys, label: n.name }));
+  const anySel = !!(sel.cust || sel.unit || sel.rec);
 
   const seg = (on: boolean) => cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", on ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-secondary/60");
 
   const nodeFill = (n: Node) => (n.kind === "u" ? "var(--secondary)" : `color-mix(in oklab, ${n.color} ${n.kind === "c" && n.color === CHART_COLORS.axis ? 14 : 20}%, transparent)`);
 
   const summary = useMemo(() => {
-    if (!sel || !hl || !model) return null;
+    if (!anySel || !hl || !model) return null;
     const all = [...model.cs, ...model.us, ...model.ss];
-    const node = all.find((n) => n.kind === sel.kind && n.id === sel.id);
     const byId = new Map(all.map((n) => [`${n.kind}:${n.id}`, n]));
-    const groupKind: Kind = sel.kind === "u" ? "c" : "u";
+    const groupKind: Kind = sel.unit ? "c" : "u";
     const m = new Map<string, number>();
     hl.forEach((f) => {
       const id = groupKind === "c" ? f.c : f.u;
@@ -327,9 +371,9 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
     const items = [...m.entries()]
       .map(([id, n]) => ({ name: byId.get(`${groupKind}:${id}`)?.name ?? id, n }))
       .sort((a, b) => b.n - a.n);
-    const lead = sel.kind === "c" ? "Đơn vị sử dụng của" : sel.kind === "u" ? "Khách hàng nghiệm thu của" : "Đơn vị có tour";
-    return { lead, name: node?.name ?? "", items, total: hl.size };
-  }, [sel, hl, model]);
+    const lead = sel.unit ? "Khách hàng nghiệm thu của" : sel.cust ? "Đơn vị sử dụng của" : "Đơn vị có tour";
+    return { lead, name: sel.unit?.label ?? sel.cust?.label ?? sel.rec ?? "", items, total: hl.size };
+  }, [sel, hl, model, anySel]);
 
   return (
     <Panel
@@ -361,7 +405,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
                 type="button"
                 onClick={() => {
                   setCustFilter(k);
-                  setSel(null);
+                  onClear();
                 }}
                 className={seg(custFilter === k)}
               >
@@ -386,9 +430,9 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
         <div ref={box} className={cn("relative", showAll && "max-h-[640px] overflow-y-auto")} onMouseLeave={() => setTip(null)}>
           <svg width={W} height={model.H} viewBox={`0 0 ${W} ${model.H}`} className="block" role="img" aria-label="Sankey khách hàng nghiệm thu, đơn vị sử dụng, trạng thái nghiệm thu">
             {[
-              { x: COLS[0]!.x, a: "start" as const, t: "Khách hàng nghiệm thu", c: `${formatNumber(model.nCo)} công ty${model.nSch ? ` + ${formatNumber(model.nSch)} trường` : ""}` },
-              { x: COLS[1]!.x, a: "start" as const, t: "Đơn vị sử dụng", c: `${formatNumber(model.nU)} đơn vị` },
-              { x: W, a: "end" as const, t: "Trạng thái nghiệm thu", c: STATUS_ORDER.map((s) => `${formatNumber(model.st[s])} ${STATUS_SHORT[s]}`).join(" / ") },
+              { x: COLS[0]!.x, a: "start" as const, t: "Khách hàng nghiệm thu", c: `${formatNumber(head!.nCo)} công ty${head!.nSch ? ` + ${formatNumber(head!.nSch)} trường` : ""}` },
+              { x: COLS[1]!.x, a: "start" as const, t: "Đơn vị sử dụng", c: `${formatNumber(head!.nU)} đơn vị` },
+              { x: W, a: "end" as const, t: "Trạng thái nghiệm thu", c: STATUS_ORDER.map((s) => `${formatNumber(head!.st[s])} ${STATUS_SHORT[s]}`).join(" / ") },
             ].map((h) => (
               <g key={h.t}>
                 <text x={h.x} y={12} fontSize={11} fontFamily={FONT} textAnchor={h.a} style={{ fill: "var(--muted-foreground)" }}>
@@ -400,21 +444,32 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
               </g>
             ))}
             {model.links.map((l) => {
-              const on = !hl || l.flows.some((f) => hl.has(f));
+              const vSel = hl ? l.flows.filter((f) => hl.has(f)).reduce((a, f) => a + val(f.p, metric), 0) : l.v;
+              const frac = l.v > 0 ? Math.min(1, vSel / l.v) : 0;
               return (
-                <path
-                  key={l.key}
-                  d={l.d}
-                  fill={l.color}
-                  opacity={on ? (hl ? 0.55 : 0.3) : 0.05}
-                  onMouseMove={(e) => move(e, { link: l })}
-                  onMouseLeave={() => setTip(null)}
-                />
+                <g key={l.key}>
+                  <path
+                    d={rpath(l.geo)}
+                    fill={l.color}
+                    opacity={hl ? 0.05 : 0.3}
+                    onMouseMove={(e) => move(e, { link: l })}
+                    onMouseLeave={() => setTip(null)}
+                  />
+                  {hl && frac > 0 && (
+                    <path
+                      d={rpath(l.geo, frac)}
+                      fill={l.color}
+                      opacity={0.6}
+                      onMouseMove={(e) => move(e, { link: l })}
+                      onMouseLeave={() => setTip(null)}
+                    />
+                  )}
+                </g>
               );
             })}
             {[...model.cs, ...model.us, ...model.ss].map((n) => {
               const on = !hl || n.flows.some((f) => hl.has(f));
-              const picked = sel?.kind === n.kind && sel.id === n.id;
+              const isPicked = picked(n);
               const room = n.w - 16;
               const two = n.h >= 32;
               return (
@@ -422,11 +477,11 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
                   key={`${n.kind}:${n.id}`}
                   style={{ cursor: "pointer" }}
                   opacity={on ? 1 : 0.28}
-                  onClick={() => toggleSel(n.kind, n.id)}
+                  onClick={() => clickNode(n)}
                   onMouseMove={(e) => move(e, { node: n })}
                   onMouseLeave={() => setTip(null)}
                 >
-                  <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={3} fill={nodeFill(n)} stroke={picked ? "var(--foreground)" : n.kind === "u" ? "var(--border)" : n.color} strokeWidth={picked ? 2 : 0.8} />
+                  <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={3} fill={nodeFill(n)} stroke={isPicked ? "var(--foreground)" : n.kind === "u" ? "var(--border)" : n.color} strokeWidth={isPicked ? 2 : 0.8} />
                   <text x={n.x + 8} y={two ? n.y + n.h / 2 - 3 : n.y + n.h / 2 + 4} fontSize={FS_NAME} fontFamily={FONT} fontWeight={600} style={{ fill: "var(--foreground)" }}>
                     {fit(n.name, room, FS_NAME, 600)}
                   </text>
@@ -440,23 +495,31 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
             })}
           </svg>
 
-          {tip && (tip.node || tip.link) && (
+          {tip && (tip.node || tip.link) && head && (
             <div className="pointer-events-none absolute z-20 w-60" style={{ left: tip.x, top: tip.y }}>
               {tip.node ? (
                 <TooltipBox label={tip.node.name}>
-                  <p>
-                    {METRIC_LABEL[metric]}: <b>{fmt(tip.node.v, metric)}</b>
-                    {model.total ? ` (${formatNumber(Math.round((tip.node.v / model.total) * 100))}% tổng)` : ""}
-                  </p>
-                  <p>Số hợp đồng: {tip.node.kind === "s" || tip.node.id === UNLINKED ? "—" : formatNumber(tip.node.contracts)}</p>
-                  <p>Số tour: {formatNumber(tip.node.n)}</p>
-                  <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
-                    {STATUS_ORDER.map((s) => `${STATUS_SHORT[s]} ${formatNumber(statusCounts(tip.node!.flows)[s])}`).join(" · ")}
-                  </p>
+                  {(() => {
+                    const t = stat(tip.node);
+                    const sc = statusCounts(t.fl);
+                    return (
+                      <>
+                        <p>
+                          {METRIC_LABEL[metric]}: <b>{fmt(t.v, metric)}</b>
+                          {head.total ? ` (${formatNumber(Math.round((t.v / head.total) * 100))}% tổng)` : ""}
+                        </p>
+                        <p>Số hợp đồng: {tip.node.kind === "s" || tip.node.id === UNLINKED ? "—" : formatNumber(t.contracts)}</p>
+                        <p>Số tour: {formatNumber(t.n)}</p>
+                        <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
+                          {STATUS_ORDER.map((s) => `${STATUS_SHORT[s]} ${formatNumber(sc[s])}`).join(" · ")}
+                        </p>
+                      </>
+                    );
+                  })()}
                   {tip.node.members && (
                     <div className="mt-1 border-t border-dashed border-border pt-1">
                       {tip.node.members.slice(0, 8).map((m) => (
-                        <p key={m.name} className="flex justify-between gap-2">
+                        <p key={m.id} className="flex justify-between gap-2">
                           <span className="truncate">{m.name}</span>
                           <span className="tabular-nums">
                             {fmt(m.v, metric)} · {m.n} tour
@@ -469,13 +532,21 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
                 </TooltipBox>
               ) : tip.link ? (
                 <TooltipBox label={`${tip.link.a.name} → ${tip.link.b.name}`}>
-                  <p>
-                    {METRIC_LABEL[metric]}: <b>{fmt(tip.link.v, metric)}</b>
-                  </p>
-                  <p>Số tour: {formatNumber(tip.link.flows.length)}</p>
-                  <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
-                    {STATUS_ORDER.map((s) => `${STATUS_SHORT[s]} ${formatNumber(statusCounts(tip.link!.flows)[s])}`).join(" · ")}
-                  </p>
+                  {(() => {
+                    const fl = selFl(tip.link.flows);
+                    const sc = statusCounts(fl);
+                    return (
+                      <>
+                        <p>
+                          {METRIC_LABEL[metric]}: <b>{fmt(fl.reduce((a, f) => a + val(f.p, metric), 0), metric)}</b>
+                        </p>
+                        <p>Số tour: {formatNumber(fl.length)}</p>
+                        <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
+                          {STATUS_ORDER.map((s) => `${STATUS_SHORT[s]} ${formatNumber(sc[s])}`).join(" · ")}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </TooltipBox>
               ) : null}
             </div>
@@ -494,7 +565,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
             </span>
           ))}
           {summary.items.length > 8 && <span className="text-muted-foreground">+{summary.items.length - 8} nữa</span>}
-          <button type="button" onClick={() => setSel(null)} className="ml-1 text-muted-foreground underline">
+          <button type="button" onClick={onClear} className="ml-1 text-muted-foreground underline">
             Bỏ chọn
           </button>
         </div>
@@ -510,7 +581,7 @@ export function TourSankey({ rows }: { rows: TourItem[] }) {
         <span className="inline-flex items-center gap-1">
           <i className="size-2.5" style={{ background: CHART_COLORS.axis }} /> Chưa gắn / nhóm khác
         </span>
-        <span>Độ dày dải theo {METRIC_LABEL[metric].toLowerCase()}. Loại khách hàng: tên khách hàng chứa "Công ty" là Công ty, còn lại là Trường trực tiếp.</span>
+        <span>Độ dày dải theo {METRIC_LABEL[metric].toLowerCase()}. Loại khách hàng: tên chứa công ty / cty / TNHH / cổ phần / tập đoàn / JSC là Công ty (có thể ghi đè trong khachhang-loai.json), còn lại là Trường trực tiếp.</span>
       </div>
     </Panel>
   );

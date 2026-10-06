@@ -19,7 +19,7 @@ import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
-import { TourSankey } from "@/features/stemtown/views/tour-sankey";
+import { TourSankey, custKeyOf, unitKeyOf, type NodeSel } from "@/features/stemtown/views/tour-sankey";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
@@ -290,7 +290,7 @@ const TIME_CFG: Record<TimeMetric, { label: string; color: string; fmt: (v: numb
 const REC_ORDER: RecStatus[] = ["Chưa đi", "Chưa nghiệm thu", "Đã nghiệm thu"];
 const REC_COLOR: Record<RecStatus, string> = { "Chưa đi": CHART_COLORS.axis, "Chưa nghiệm thu": WARN, "Đã nghiệm thu": "#2e9e5b" };
 
-type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus; timeBucket?: string };
+type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus; timeBucket?: string; cust?: NodeSel; unit?: NodeSel };
 const CHART_H = 250;
 const WEEKDAY_FULL = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 const mmYYYY = (m: string) => `${m.slice(5, 7)}-${m.slice(0, 4)}`;
@@ -301,6 +301,24 @@ const TIME_UNITS: { key: TimeUnit; label: string }[] = [
   { key: "month", label: "Tháng" },
   { key: "quarter", label: "Quý" },
   { key: "year", label: "Năm" },
+];
+
+const dmy = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "Chưa chốt ngày");
+const DETAIL_COLS: Column<TourItem>[] = [
+  { key: "date", header: "Ngày tour", render: (r) => dmy(r.date) },
+  { key: "time", header: "Khung giờ", render: (r) => r.timeRaw ?? "—" },
+  { key: "school", header: "Tên trường / đơn vị", render: (r) => r.schoolName, noTruncate: true },
+  { key: "cust", header: "Khách hàng nghiệm thu", render: (r) => r.tenKhachHang ?? "—", noTruncate: true },
+  { key: "grade", header: "Khối lớp", render: (r) => r.grade ?? "—" },
+  { key: "sale", header: "Sale", render: (r) => r.sale ?? "—" },
+  { key: "hs", header: "SL HS", render: (r) => formatNumber(r.students), align: "right" },
+  { key: "tt", header: "SL TT", render: (r) => (r.actualStudents === null ? "—" : formatNumber(r.actualStudents)), align: "right" },
+  { key: "price", header: "Giá vé", render: (r) => formatNumber(r.price), align: "right" },
+  { key: "rev", header: "DT dự kiến", render: (r) => formatNumber(r.revenue), align: "right" },
+  { key: "status", header: "Tiến độ", render: (r) => r.status },
+  { key: "rec", header: "Nghiệm thu", render: (r) => reconcileStatus(r) },
+  { key: "bb", header: "BienBanID", render: (r) => r.bienBanId ?? "—", noTruncate: true },
+  { key: "note", header: "Ghi chú", render: (r) => r.note ?? "—" },
 ];
 
 function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
@@ -314,6 +332,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
   const [timeMetric, setTimeMetric] = useState<TimeMetric>("dt");
   const [timeUnit, setTimeUnit] = useState<TimeUnit>("month");
   const toggle = <K extends keyof OvSel>(k: K, v: OvSel[K]) => setSel((s) => (s[k] === v ? { ...s, [k]: undefined } : { ...s, [k]: v }));
+  const toggleNode = (k: "cust" | "unit", v: NodeSel) =>
+    setSel((s) => (s[k]?.keys.join("|") === v.keys.join("|") ? { ...s, [k]: undefined } : { ...s, [k]: v }));
 
   const base = useMemo(
     () =>
@@ -331,6 +351,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           (skip.includes("weekday") || sel.weekday === undefined || weekdayIdx(r.date as string) === sel.weekday) &&
           (skip.includes("dimVal") || !sel.dimKey || DIM_CFG[sel.dimKey].keyFn(r) === sel.dimVal) &&
           (skip.includes("rec") || !sel.rec || reconcileStatus(r) === sel.rec) &&
+          (skip.includes("cust") || !sel.cust || sel.cust.keys.includes(custKeyOf(r))) &&
+          (skip.includes("unit") || !sel.unit || sel.unit.keys.includes(unitKeyOf(r))) &&
           (skip.includes("timeBucket") || !sel.timeBucket || (r.date && bucketOf(r.date, timeUnit) === sel.timeBucket)),
       ),
     [base, sel, timeUnit],
@@ -455,14 +477,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     const remain = Math.max(0, target - actual);
     return { label: "% đạt Target", value: formatPercent(pct), belowText: `Target ${fmt(target)} · Còn ${fmt(remain)}` };
   };
-  const backlog = useMemo(
-    () =>
-      recRows
-        .filter((r) => reconcileStatus(r) === "Chưa nghiệm thu" && r.date)
-        .map((r) => ({ ...r, daysAgo: Math.round((new Date(today).getTime() - new Date(r.date as string).getTime()) / 86400000) }))
-        .sort((a, b) => b.daysAgo - a.daysAgo),
-    [recRows, today],
-  );
+  const detail = useMemo(() => [...rows].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.id - b.id), [rows]);
 
   const chips = (
     [
@@ -470,6 +485,8 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
       sel.weekday !== undefined ? ["weekday", sel.weekday === 6 ? "Chủ nhật" : `Thứ ${sel.weekday + 2}`] : null,
       sel.dimKey ? ["dimVal", `${DIM_CFG[sel.dimKey].label}: ${sel.dimVal}`] : null,
       sel.rec ? ["rec", `Trạng thái: ${sel.rec}`] : null,
+      sel.cust ? ["cust", `Khách hàng: ${sel.cust.label}`] : null,
+      sel.unit ? ["unit", `Đơn vị: ${sel.unit.label}`] : null,
       sel.timeBucket ? ["timeBucket", `${TIME_UNITS.find((u) => u.key === timeUnit)?.label}: ${bucketLabel(sel.timeBucket, timeUnit)}`] : null,
     ] as ([keyof OvSel, string] | null)[]
   ).filter((x): x is [keyof OvSel, string] => x !== null);
@@ -798,7 +815,12 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
 
       {/* Hàng 3: Mạng lưới khách hàng (Sankey) + Heatmap Tháng × Thứ */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <TourSankey rows={rows} />
+        <TourSankey
+          rows={rowsExcept("cust", "unit", "rec")}
+          sel={{ cust: sel.cust, unit: sel.unit, rec: sel.rec }}
+          onToggle={(kind, v) => (kind === "s" ? toggle("rec", v as RecStatus) : toggleNode(kind === "c" ? "cust" : "unit", v as NodeSel))}
+          onClear={() => setSel((s) => ({ ...s, cust: undefined, unit: undefined, rec: undefined }))}
+        />
         <Panel title="Số tour theo Tháng × Thứ" subtitle="Bấm ô, tên tháng hoặc tên thứ để lọc chéo." code="CH-TOUR-O5" isEmpty={heat.ms.length === 0}>
           <div className="overflow-auto" style={{ maxHeight: 400 }}>
             <table className="w-full border-separate border-spacing-[3px] text-xs">
@@ -852,47 +874,15 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
         </Panel>
       </div>
 
-      {/* Hàng 4: Danh sách cần xử lý — tour Done nhưng chưa có biên bản nghiệm thu */}
-      <Panel
-        title="Tour đã Done nhưng chưa nghiệm thu — cần đối chiếu"
-        subtitle="Sắp theo số ngày trễ nhiều nhất trước — đây là danh sách việc cần làm cho vận hành/kế toán."
-        code="CH-TOUR-O6"
-        isEmpty={backlog.length === 0}
-      >
-        {backlog.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Không có tour nào tồn đọng — mọi tour Done trong khoảng đang lọc đều đã có biên bản nghiệm thu khớp.</p>
-        ) : (
-          <div className="max-h-80 overflow-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-card text-muted-foreground">
-                <tr>
-                  {["Ngày tour", "Số ngày trễ", "Tên trường", "Sale phụ trách", "Số học sinh", "Doanh thu dự kiến"].map((h, i) => (
-                    <th key={h} className={cn("whitespace-nowrap border-b border-border px-2 py-2 font-medium", i >= 4 ? "text-right" : "text-left")}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {backlog.map((r) => (
-                  <tr key={r.id} className="border-b border-border">
-                    <td className="whitespace-nowrap px-2 py-1.5">{dm(r.date as string)}/{(r.date as string).slice(0, 4)}</td>
-                    <td className="px-2 py-1.5">
-                      <span className={cn("rounded-full px-2 py-0.5 font-medium", r.daysAgo > 14 ? "bg-destructive/15 text-destructive" : "bg-[var(--brand-accent)]/15 text-[var(--brand-accent)]")}>
-                        {r.daysAgo} ngày
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 font-medium">{r.schoolName}</td>
-                    <td className="px-2 py-1.5">{r.sale ?? "—"}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(r.students)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{fTr(r.revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      {/* Hàng 4: Chi tiết lịch tour — chạy theo toàn bộ bộ lọc & cross-filter của tab */}
+      <FactTable
+        title="Chi tiết lịch tour"
+        subtitle={`${formatNumber(detail.length)} tour theo bộ lọc và cross-filter đang chọn.`}
+        columns={DETAIL_COLS}
+        rows={detail}
+        fileName="chi-tiet-lich-tour-b2b"
+        pageSize={12}
+      />
     </div>
   );
 }
