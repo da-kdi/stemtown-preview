@@ -141,6 +141,7 @@ export function TourSankey({
         const cust = (r.tenKhachHang ?? "").split(";")[0]?.trim() ?? "";
         const linked = cust !== "";
         const ids = (r.bienBanId ?? "").split(";").map((x) => x.trim()).filter(Boolean);
+        const cons = (r.soHopDong ?? "").split(";").map((x) => x.trim()).filter(Boolean);
         return {
           cid: custKeyOf(r),
           cname: linked ? clean(cust) : "Chưa gắn biên bản",
@@ -150,7 +151,7 @@ export function TourSankey({
           s: reconcileStatus(r),
           dt: r.revenue,
           hs: r.students,
-          contracts: ids.map(contractOf),
+          contracts: ids.map((id, i) => cons[i] ?? contractOf(id)),
         };
       }),
     [rows, contractOf],

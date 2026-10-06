@@ -356,6 +356,8 @@ export type TourRow = {
   bienBanId: string | null;
   /** Cột "TenKhachHang" — tên khách hàng theo biên bản nghiệm thu tương ứng. */
   tenKhachHang: string | null;
+  /** Cột "SoHopDong" — số hợp đồng tương ứng từng BienBanID (nhiều giá trị ngăn bằng ";", cùng thứ tự BienBanID). */
+  soHopDong: string | null;
 };
 
 function buoiOf(raw: unknown): TourRow["buoi"] {
@@ -406,6 +408,7 @@ export const TOUR_COLUMNS = [
   "Giá vé",
   "Doanh thu dự kiến",
   "Note 2",
+  "SoHopDong",
   "BienBanID",
   "TenKhachHang",
 ] as const;
@@ -487,6 +490,7 @@ export function mapTours(raw: Record<string, unknown>[]): TourRow[] {
       note2: toStr(r["Note 2"]),
       bienBanId: toStr(r["BienBanID"]),
       tenKhachHang: toStr(r["TenKhachHang"]),
+      soHopDong: toStr(r["SoHopDong"]),
     }));
 }
 
