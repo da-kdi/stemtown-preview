@@ -104,11 +104,13 @@ export function TourSankey({
   sel,
   onToggle,
   onClear,
+  onDrill,
 }: {
   rows: TourItem[];
   sel: SankeySel;
   onToggle: (kind: Kind, v: NodeSel | RecStatus) => void;
   onClear: () => void;
+  onDrill?: (unitKey: string, name: string) => void;
 }) {
   const [metric, setMetric] = useState<Metric>("dt");
   const [custFilter, setCustFilter] = useState<CustFilter>("all");
@@ -586,6 +588,11 @@ export function TourSankey({
             </span>
           ))}
           {summary.items.length > 8 && <span className="text-muted-foreground">+{summary.items.length - 8} nữa</span>}
+          {onDrill && sel.unit && sel.unit.keys.length === 1 && (
+            <button type="button" onClick={() => onDrill(sel.unit!.keys[0]!, sel.unit!.label)} className="ml-1 rounded-md border border-primary px-2 py-0.5 font-medium text-primary hover:bg-primary/10">
+              Xem tất cả lịch tour →
+            </button>
+          )}
           <button type="button" onClick={onClear} className="ml-1 text-muted-foreground underline">
             Bỏ chọn
           </button>

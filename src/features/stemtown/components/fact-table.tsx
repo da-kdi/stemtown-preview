@@ -13,6 +13,8 @@ export type Column<T> = {
   cellStyle?: (row: T) => CSSProperties | undefined;
   /** Hiển thị toàn bộ nội dung, không cắt "..." (vd Tên khách hàng dài) — cuộn ngang bảng nếu cần. */
   noTruncate?: boolean;
+  /** Có giá trị -> ô hiển thị như liên kết; bấm để drill-through (vd mở lịch tour của trường). */
+  onCellClick?: (row: T) => void;
 };
 
 export function FactTable<T>({
@@ -130,7 +132,13 @@ export function FactTable<T>({
                             c.align === "right" && "text-right tabular-nums",
                           )}
                         >
-                          {value}
+                          {c.onCellClick ? (
+                            <button type="button" className="text-left font-medium text-primary underline-offset-2 hover:underline" onClick={() => c.onCellClick?.(r)}>
+                              {value}
+                            </button>
+                          ) : (
+                            value
+                          )}
                         </td>
                       );
                     })}

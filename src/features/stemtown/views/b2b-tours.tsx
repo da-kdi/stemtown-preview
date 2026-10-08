@@ -77,6 +77,12 @@ export function TourSection() {
   const [version, setVersion] = useState(0);
   const [imported, setImported] = useState(false);
   const [tab, setTab] = useState<"overview" | "schedule">("overview");
+  /** Drill-through: trường đang xem toàn bộ lịch (key = unitKeyOf) — dùng chung cho cả 2 tab con. */
+  const [school, setSchool] = useState<{ key: string; name: string } | null>(null);
+  const drill = useCallback((key: string, name: string) => {
+    setSchool({ key, name });
+    setTab("schedule");
+  }, []);
   const today = useMemo(() => todayVN(), []);
 
   const apply = useCallback((raw: Record<string, unknown>[] | null) => {
@@ -93,6 +99,11 @@ export function TourSection() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const items = useMemo(() => enrichTours(tourRows, today), [version, today]);
+  /** Lịch chỉ giữ tour đã Done hoặc chưa tới hạn. Tour quá ngày mà chưa đi (chưa Done) bị loại, không list vào lịch. */
+  const scheduleItems = useMemo(
+    () => items.filter((r) => r.status === "Done" || (r.date ? r.date >= today : r.month >= today.slice(0, 7))),
+    [items, today],
+  );
 
   return (
     <>
@@ -140,10 +151,10 @@ export function TourSection() {
 
       {/* Giữ cả 2 tab trong DOM để đổi tab không mất trạng thái lọc/tuần đang xem */}
       <div hidden={tab !== "overview"}>
-        <TourOverview key={`o-${version}`} items={items} today={today} />
+        <TourOverview key={`o-${version}`} items={items} today={today} onDrill={drill} />
       </div>
       <div hidden={tab !== "schedule"}>
-        <TourSchedule key={`s-${version}`} items={items} today={today} active={tab === "schedule"} />
+        <TourSchedule key={`s-${version}`} items={scheduleItems} today={today} active={tab === "schedule"} school={school} onSchool={setSchool} />
       </div>
     </>
   );
@@ -321,7 +332,7 @@ const DETAIL_COLS: Column<TourItem>[] = [
   { key: "note", header: "Ghi chú", render: (r) => r.note ?? "—" },
 ];
 
-function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
+function TourOverview({ items, today, onDrill }: { items: TourItem[]; today: string; onDrill: (key: string, name: string) => void }) {
   const defaultRange = useMemo<DateRange>(() => {
     const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
     return ds.length ? { from: ds[0] as string, to: ds[ds.length - 1] as string } : quickRange("fyThis", today);
@@ -477,6 +488,10 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
     const remain = Math.max(0, target - actual);
     return { label: "% đạt Target", value: formatPercent(pct), belowText: `Target ${fmt(target)} · Còn ${fmt(remain)}` };
   };
+  const detailCols = useMemo<Column<TourItem>[]>(
+    () => DETAIL_COLS.map((c) => (c.key === "school" ? { ...c, onCellClick: (r: TourItem) => onDrill(unitKeyOf(r), r.schoolName) } : c)),
+    [onDrill],
+  );
   const detail = useMemo(() => [...rows].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.id - b.id), [rows]);
 
   const chips = (
@@ -820,6 +835,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
           sel={{ cust: sel.cust, unit: sel.unit, rec: sel.rec }}
           onToggle={(kind, v) => (kind === "s" ? toggle("rec", v as RecStatus) : toggleNode(kind === "c" ? "cust" : "unit", v as NodeSel))}
           onClear={() => setSel((s) => ({ ...s, cust: undefined, unit: undefined, rec: undefined }))}
+          onDrill={onDrill}
         />
         <Panel title="Số tour theo Tháng × Thứ" subtitle="Bấm ô, tên tháng hoặc tên thứ để lọc chéo." code="CH-TOUR-O5" isEmpty={heat.ms.length === 0}>
           <div className="overflow-auto" style={{ maxHeight: 400 }}>
@@ -878,7 +894,7 @@ function TourOverview({ items, today }: { items: TourItem[]; today: string }) {
       <FactTable
         title="Chi tiết lịch tour"
         subtitle={`${formatNumber(detail.length)} tour theo bộ lọc và cross-filter đang chọn.`}
-        columns={DETAIL_COLS}
+        columns={detailCols}
         rows={detail}
         fileName="chi-tiet-lich-tour-b2b"
         pageSize={12}
@@ -904,7 +920,19 @@ const dayMetricValue = (inf: DayInfo, metric: HeatMetric): number =>
   metric === "hs" ? inf.load : metric === "tour" ? inf.tours : inf.items.filter((r) => r.kind === "tour").reduce((a, r) => a + r.revenue, 0);
 const fmtMetric = (v: number, metric: HeatMetric): string => (metric === "dt" ? (v ? fTr(v) : "") : v ? formatNumber(v) : "");
 
-function TourSchedule({ items, today, active }: { items: TourItem[]; today: string; active: boolean }) {
+function TourSchedule({
+  items,
+  today,
+  active,
+  school,
+  onSchool,
+}: {
+  items: TourItem[];
+  today: string;
+  active: boolean;
+  school: { key: string; name: string } | null;
+  onSchool: (s: { key: string; name: string } | null) => void;
+}) {
   const curMonth = today.slice(0, 7);
   /** "Đã đi" = ngày tour < hôm nay; "Chưa đi" = từ hôm nay trở đi hoặc chưa có ngày cụ thể. */
   const [statuses, setStatuses] = useState<Set<"Đã đi" | "Chưa đi">>(() => new Set());
@@ -1022,6 +1050,21 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
     };
   }, [weekInfos, weekDays, dated, week]);
 
+  const schoolTours = useMemo(
+    () =>
+      school
+        ? items
+            .filter((r) => unitKeyOf(r) === school.key)
+            .sort((a, b) => (a.date ?? `${a.month}-99`).localeCompare(b.date ?? `${b.month}-99`) || (a.start ?? 0) - (b.start ?? 0))
+        : [],
+    [items, school],
+  );
+  const schoolDays = useMemo(() => new Set(schoolTours.filter((r) => r.date).map((r) => r.date as string)), [schoolTours]);
+  const schoolTot = useMemo(() => totalOf(schoolTours), [schoolTours]);
+  const schoolPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (active && school) schoolPanel.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [active, school]);
   const undatedInRange = useMemo(() => undated.filter((r) => r.month >= range.from.slice(0, 7) && r.month <= range.to.slice(0, 7)), [undated, range]);
   const mList = useMemo(() => {
     let l = dated.filter((r) => r.kind === "tour" && (r.date as string) >= range.from && (r.date as string) <= range.to);
@@ -1083,6 +1126,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
         onReset={() => {
           setMScope("all");
           setStatuses(new Set());
+          onSchool(null);
         }}
         extra={
           <div className="flex flex-col gap-1">
@@ -1138,6 +1182,62 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
         )}
       </p>
 
+      {school && (
+        <section ref={schoolPanel} className="rounded-xl border border-primary/40 bg-card p-4 shadow-xs">
+          <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Lịch tour của <span className="text-[var(--brand-dark)]">{school.name}</span>
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatNumber(schoolTours.length)} tour · {formatNumber(schoolTot.hs)} HS · {fTr(schoolTot.dt)} dự kiến ·{" "}
+                {formatNumber(schoolTours.filter((r) => r.date && r.date < today).length)} đã đi / {formatNumber(schoolTours.filter((r) => !r.date || r.date >= today).length)} sắp tới.
+                Các ngày có tour của trường được viền cam trên lịch tháng; bấm một dòng để tới tuần đó.
+              </p>
+            </div>
+            <button type="button" onClick={() => onSchool(null)} className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-secondary">
+              Bỏ chọn trường ✕
+            </button>
+          </div>
+          <div className="max-h-72 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card text-muted-foreground">
+                <tr>
+                  {["Ngày", "Khung giờ", "Sale", "SL HS", "SL TT", "DT dự kiến", "Tiến độ", "Nghiệm thu"].map((h, i) => (
+                    <th key={h} className={cn("whitespace-nowrap border-b border-border px-1.5 py-2 font-medium", i >= 3 && i <= 5 ? "text-right" : "text-left")}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {schoolTours.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={cn("border-b border-border hover:bg-secondary/60", r.date && "cursor-pointer")}
+                    onClick={() => {
+                      if (!r.date) return;
+                      setSelId(r.id);
+                      selectWeek(mondayOf(r.date), r.date);
+                      tlCard.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }}
+                  >
+                    <td className="whitespace-nowrap px-1.5 py-1.5">{r.date ? `${WEEKDAYS[weekdayIdx(r.date)]} ${toDMY(r.date)}` : <span style={{ color: WARN }}>Chưa có ngày ({r.month.slice(5, 7)}/{r.month.slice(0, 4)})</span>}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5">{r.start !== null && r.end !== null ? `${hhmm(r.start)}–${hhmm(r.end)}` : (r.timeRaw ?? "—")}</td>
+                    <td className="px-1.5 py-1.5">{r.sale ?? ""}</td>
+                    <td className="px-1.5 py-1.5 text-right tabular-nums">{formatNumber(r.students)}</td>
+                    <td className="px-1.5 py-1.5 text-right tabular-nums">{r.actualStudents !== null ? formatNumber(r.actualStudents) : ""}</td>
+                    <td className="px-1.5 py-1.5 text-right tabular-nums">{fTr(r.revenue)}</td>
+                    <td className="px-1.5 py-1.5">{r.status}</td>
+                    <td className="px-1.5 py-1.5">{reconcileStatus(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(360px,5fr)_minmax(0,8fr)]">
         {/* ---------------- Heatmap tháng → tuần ---------------- */}
         <section ref={hmCard} className="rounded-xl border border-border bg-card p-4 shadow-xs">
@@ -1170,13 +1270,13 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
           </div>
           <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
-              <i className="size-2 rounded-full bg-[#2e9e5b]" /> Còn chỗ cả 2 buổi
+              <i className="size-2 rounded-full bg-[#2e9e5b]" /> Còn chỗ 2 buổi
             </span>
             <span className="inline-flex items-center gap-1">
-              <i className="size-2 rounded-full" style={{ background: WARN }} /> 1 buổi đã Full
+              <i className="size-2 rounded-full" style={{ background: WARN }} /> Còn chỗ 1 buổi
             </span>
             <span className="inline-flex items-center gap-1">
-              <i className="size-2 rounded-full bg-destructive" /> Cả 2 buổi Full
+              <i className="size-2 rounded-full bg-destructive" /> Full chỗ 2 buổi
             </span>
           </div>
           <div ref={hmScroll} className="relative overflow-auto border-t border-border">
@@ -1273,10 +1373,11 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                 const { sang, chieu } = buoiLoad(dated, d);
                                 const hasTour = sang > 0 || chieu > 0;
                                 const fullCount = (sang >= cap ? 1 : 0) + (chieu >= cap ? 1 : 0);
-                                const dotColor = !hasTour ? null : fullCount === 2 ? "var(--destructive)" : fullCount === 1 ? WARN : "#2e9e5b";
+                                const dotColor = fullCount === 2 ? "var(--destructive)" : fullCount === 1 ? WARN : "#2e9e5b";
+                                const slotLabel = fullCount === 2 ? "Full chỗ 2 buổi" : fullCount === 1 ? "Còn chỗ 1 buổi" : "Còn chỗ 2 buổi";
                                 const statusText = !hasTour
-                                  ? "Chưa có tour"
-                                  : `Sáng: ${formatNumber(sang)}/${cap} ${sang >= cap ? "(Full)" : `(còn ${formatNumber(cap - sang)} HS)`} · Chiều: ${formatNumber(chieu)}/${cap} ${chieu >= cap ? "(Full)" : `(còn ${formatNumber(cap - chieu)} HS)`}`;
+                                  ? `${slotLabel} (chưa có tour)`
+                                  : `${slotLabel}. Sáng: ${formatNumber(sang)}/${cap} ${sang >= cap ? "(Full)" : `(còn ${formatNumber(cap - sang)} HS)`} · Chiều: ${formatNumber(chieu)}/${cap} ${chieu >= cap ? "(Full)" : `(còn ${formatNumber(cap - chieu)} HS)`}`;
                                 return (
                                   <td
                                     key={d}
@@ -1288,7 +1389,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                     style={{
                                       background: pct ? mix(CHART_COLORS.primary, pct) : "transparent",
                                       color: pct >= 70 ? "#fff" : undefined,
-                                      boxShadow: isFocus ? "inset 0 0 0 2px var(--foreground)" : undefined,
+                                      boxShadow: isFocus ? "inset 0 0 0 2px var(--foreground)" : schoolDays.has(d) ? "inset 0 0 0 2px #E36511" : undefined,
                                     }}
                                     title={`${WEEKDAYS[i]} ${dm(d)} — ${statusText}`}
                                     onClick={() => selectWeek(w, d)}
@@ -1299,7 +1400,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                                     >
                                       {Number(d.slice(8))}
                                     </span>
-                                    {dotColor && <span className="absolute right-1 top-1 size-2 rounded-full" style={{ background: dotColor }} />}
+                                    <span className="absolute right-1 top-1 size-2 rounded-full" style={{ background: dotColor }} />
                                     <span className="text-[13px] font-semibold tabular-nums">{fmtMetric(v, hmMetric)}</span>
                                   </td>
                                 );
@@ -1501,7 +1602,7 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                 className="min-w-0 self-start break-words rounded-lg border border-[var(--brand-accent)]/40 p-3 text-sm"
                 style={{ background: "color-mix(in oklab, var(--brand-accent) 12%, transparent)" }}
               >
-                {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} />}
+                {!sel ? <p className="text-xs text-muted-foreground">Bấm vào một tour trên lịch để xem đầy đủ thông tin.</p> : <TourDetail r={sel} onSchool={() => onSchool({ key: unitKeyOf(sel), name: sel.schoolName })} />}
               </aside>
             )}
           </div>
@@ -1569,7 +1670,11 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                     <td className="whitespace-nowrap px-1.5 py-1.5">
                       {r.month.slice(5, 7)} - {r.month.slice(0, 4)}
                     </td>
-                    <td className="px-1.5 py-1.5 font-medium">{r.schoolName}</td>
+                    <td className="px-1.5 py-1.5 font-medium">
+                      <button type="button" className="text-left text-primary underline-offset-2 hover:underline" title="Xem tất cả lịch tour của trường" onClick={() => onSchool({ key: unitKeyOf(r), name: r.schoolName })}>
+                        {r.schoolName}
+                      </button>
+                    </td>
                     <td className="px-1.5 py-1.5">{r.sale ?? ""}</td>
                     <td className="px-1.5 py-1.5">{r.status}</td>
                     <td className="px-1.5 py-1.5 text-right tabular-nums">{r.students ? formatNumber(r.students) : ""}</td>
@@ -1659,7 +1764,17 @@ function TourSchedule({ items, today, active }: { items: TourItem[]; today: stri
                       </td>
                       <td className="whitespace-nowrap px-1.5 py-1.5">{r.start !== null && r.end !== null ? `${hhmm(r.start)}–${hhmm(r.end)}${r.endAssumed ? "*" : ""}` : (r.timeRaw ?? "—")}</td>
                       <td className="px-1.5 py-1.5">
-                        {r.schoolName}
+                        <button
+                          type="button"
+                          className="text-left font-medium text-primary underline-offset-2 hover:underline"
+                          title="Xem tất cả lịch tour của trường"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSchool({ key: unitKeyOf(r), name: r.schoolName });
+                          }}
+                        >
+                          {r.schoolName}
+                        </button>
                         {r.kind !== "tour" && <span className="ml-1 rounded-full border border-border px-1.5 text-[10px] text-muted-foreground">{KIND_LABEL[r.kind]}</span>}
                       </td>
                       <td className="px-1.5 py-1.5">{r.grade ?? ""}</td>
@@ -1719,11 +1834,14 @@ function F({ k, v, hot }: { k: string; v: ReactNode; hot?: boolean }) {
   );
 }
 
-function TourDetail({ r }: { r: TourItem }) {
+function TourDetail({ r, onSchool }: { r: TourItem; onSchool: () => void }) {
   const diff = r.actualStudents !== null ? r.actualStudents - r.students : null;
   return (
     <div>
-      <b className="mb-2 block text-base leading-snug text-[var(--brand-dark)]">{r.schoolName}</b>
+      <b className="block text-base leading-snug text-[var(--brand-dark)]">{r.schoolName}</b>
+      <button type="button" onClick={onSchool} className="mb-2 mt-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline">
+        Xem tất cả lịch tour của trường →
+      </button>
       <dl className="grid grid-cols-1 gap-y-2 text-xs">
         <F
           k="Ngày, giờ"
