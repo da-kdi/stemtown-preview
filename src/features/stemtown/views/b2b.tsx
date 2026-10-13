@@ -1271,15 +1271,17 @@ export function B2BPage() {
         <InsightList items={data.insights} />
       </Panel>
 
-      <FactTable
-        title="Bảng chi tiết biên bản nghiệm thu"
-        subtitle={school ? `Đang lọc theo trường ${school}` : "Chọn cột hiển thị và xuất dữ liệu"}
-        columns={columns}
-        rows={sortedRows}
-        fileName="b2b-bien-ban-nghiem-thu"
+      <TourSection
+        beforeDetail={
+          <FactTable
+            title="Bảng chi tiết biên bản nghiệm thu"
+            subtitle={school ? `Đang lọc theo trường ${school}` : "Chọn cột hiển thị và xuất dữ liệu"}
+            columns={columns}
+            rows={sortedRows}
+            fileName="b2b-bien-ban-nghiem-thu"
+          />
+        }
       />
-
-      <TourSection />
 
       <CustomChartsSection dataset="b2b" />
     </DashboardShell>

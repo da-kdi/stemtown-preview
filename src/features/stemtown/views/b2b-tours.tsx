@@ -73,7 +73,7 @@ const selectCls = "h-9 min-w-40 rounded-md border border-input bg-card px-3 text
 /* Trang Lịch tour B2B: 2 tab con Tổng quan / Lịch tour                */
 /* ================================================================== */
 
-export function TourSection() {
+export function TourSection({ beforeDetail }: { beforeDetail?: ReactNode } = {}) {
   const [version, setVersion] = useState(0);
   const [imported, setImported] = useState(false);
   const [tab, setTab] = useState<"overview" | "schedule">("overview");
@@ -151,7 +151,7 @@ export function TourSection() {
 
       {/* Giữ cả 2 tab trong DOM để đổi tab không mất trạng thái lọc/tuần đang xem */}
       <div hidden={tab !== "overview"}>
-        <TourOverview key={`o-${version}`} items={items} today={today} onDrill={drill} />
+        <TourOverview key={`o-${version}`} items={items} today={today} onDrill={drill} beforeDetail={beforeDetail} />
       </div>
       <div hidden={tab !== "schedule"}>
         <TourSchedule key={`s-${version}`} items={scheduleItems} today={today} active={tab === "schedule"} school={school} onSchool={setSchool} />
@@ -332,7 +332,7 @@ const DETAIL_COLS: Column<TourItem>[] = [
   { key: "note", header: "Ghi chú", render: (r) => r.note ?? "—" },
 ];
 
-function TourOverview({ items, today, onDrill }: { items: TourItem[]; today: string; onDrill: (key: string, name: string) => void }) {
+function TourOverview({ items, today, onDrill, beforeDetail }: { items: TourItem[]; today: string; onDrill: (key: string, name: string) => void; beforeDetail?: ReactNode }) {
   const defaultRange = useMemo<DateRange>(() => {
     const ds = items.filter((r) => r.date).map((r) => r.date as string).sort();
     return ds.length ? { from: ds[0] as string, to: ds[ds.length - 1] as string } : quickRange("fyThis", today);
@@ -889,6 +889,8 @@ function TourOverview({ items, today, onDrill }: { items: TourItem[]; today: str
           </div>
         </Panel>
       </div>
+
+      {beforeDetail}
 
       {/* Hàng 4: Chi tiết lịch tour — chạy theo toàn bộ bộ lọc & cross-filter của tab */}
       <FactTable
