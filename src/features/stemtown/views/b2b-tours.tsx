@@ -19,6 +19,7 @@ import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
+import { customerOf } from "@/features/stemtown/lib/khach-hang-tour";
 import { TourSankey, custKeyOf, custNameOf, unitKeyOf, type NodeSel } from "@/features/stemtown/views/tour-sankey";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
@@ -73,7 +74,18 @@ const selectCls = "h-9 min-w-40 rounded-md border border-input bg-card px-3 text
 /* Trang Lịch tour B2B: 2 tab con Tổng quan / Lịch tour                */
 /* ================================================================== */
 
-export function TourSection({ beforeDetail }: { beforeDetail?: ReactNode } = {}) {
+export function TourSection({
+  beforeDetail,
+  linkIds,
+  linkLabel,
+  onClearLink,
+}: {
+  beforeDetail?: ReactNode;
+  /** SchoolIDCon (HOA) của các biên bản nghiệm thu đang được lọc chéo ở phần trên; null = không lọc. */
+  linkIds?: Set<string> | null;
+  linkLabel?: string;
+  onClearLink?: () => void;
+} = {}) {
   const [version, setVersion] = useState(0);
   const [imported, setImported] = useState(false);
   const [tab, setTab] = useState<"overview" | "schedule">("overview");
@@ -98,11 +110,16 @@ export function TourSection({ beforeDetail }: { beforeDetail?: ReactNode } = {})
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const items = useMemo(() => enrichTours(tourRows, today), [version, today]);
+  const allItems = useMemo(() => enrichTours(tourRows, today), [version, today]);
   /** Lịch chỉ giữ tour đã Done hoặc chưa tới hạn. Tour quá ngày mà chưa đi (chưa Done) bị loại, không list vào lịch. */
+  const linkedItems = useMemo(
+    () => (linkIds ? allItems.filter((r) => linkIds.has(customerOf(r).id)) : allItems),
+    [allItems, linkIds],
+  );
+  const items = linkedItems;
   const scheduleItems = useMemo(
-    () => items.filter((r) => r.status === "Done" || (r.date ? r.date >= today : r.month >= today.slice(0, 7))),
-    [items, today],
+    () => linkedItems.filter((r) => r.status === "Done" || (r.date ? r.date >= today : r.month >= today.slice(0, 7))),
+    [linkedItems, today],
   );
 
   return (
@@ -112,6 +129,20 @@ export function TourSection({ beforeDetail }: { beforeDetail?: ReactNode } = {})
         subtitle="Dựa trên lịch tham quan đã xếp (kể cả chưa nghiệm thu). Nguồn dữ liệu riêng, doanh thu ở đây là doanh thu dự kiến, không tính vào doanh thu B2B nghiệm thu."
         icon={<CalendarClock className="size-4" />}
       />
+      {linkIds && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
+          <span className="font-medium text-primary">Đang lọc theo phần Nghiệm thu:</span>
+          <span>{linkLabel}</span>
+          <span className="text-muted-foreground">
+            · {formatNumber(items.length)}/{formatNumber(allItems.length)} tour thuộc {formatNumber(linkIds.size)} khách hàng
+          </span>
+          {onClearLink && (
+            <button type="button" onClick={onClearLink} className="ml-auto text-primary hover:underline">
+              Bỏ lọc
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1" role="tablist">
           {(

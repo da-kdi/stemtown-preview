@@ -440,6 +440,12 @@ export function B2BPage() {
     };
   }, [filters, sel, school, compare, dataVersion]);
 
+  /** Lọc chéo từ phần Nghiệm thu sang Lịch tour: các SchoolIDCon còn lại sau khi chọn công ty/trường/chart. */
+  const linkIds = useMemo(
+    () => (chips.length ? new Set(data.rows.map((r) => r.schoolIdCon.toUpperCase())) : null),
+    [chips.length, data.rows],
+  );
+
   const columns: Column<B2BRow>[] = [
     { key: "experienceDate", header: "Ngày trải nghiệm", render: (r) => (r.experienceDate ? toDMY(r.experienceDate) : "—") },
     { key: "schoolKey", header: "Mã khách hàng", render: (r) => r.schoolIdCon },
@@ -1272,6 +1278,9 @@ export function B2BPage() {
       </Panel>
 
       <TourSection
+        linkIds={linkIds}
+        linkLabel={chips.map((c) => c.label).join(" · ")}
+        onClearLink={clearAll}
         beforeDetail={
           <FactTable
             title="Bảng chi tiết biên bản nghiệm thu"
