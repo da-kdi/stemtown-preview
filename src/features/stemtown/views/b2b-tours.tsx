@@ -20,6 +20,7 @@ import { FactTable, type Column } from "@/features/stemtown/components/fact-tabl
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
 import { customerOf } from "@/features/stemtown/lib/khach-hang-tour";
+import { SlotFinder } from "@/features/stemtown/views/slot-finder";
 import { TourSankey, custKeyOf, custNameOf, unitKeyOf, type NodeSel } from "@/features/stemtown/views/tour-sankey";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
@@ -185,7 +186,7 @@ export function TourSection({
         <TourOverview key={`o-${version}`} items={items} today={today} onDrill={drill} beforeDetail={beforeDetail} />
       </div>
       <div hidden={tab !== "schedule"}>
-        <TourSchedule key={`s-${version}`} items={scheduleItems} today={today} active={tab === "schedule"} school={school} onSchool={setSchool} />
+        <TourSchedule key={`s-${version}`} items={scheduleItems} allItems={allItems} today={today} active={tab === "schedule"} school={school} onSchool={setSchool} />
       </div>
     </>
   );
@@ -955,12 +956,15 @@ const fmtMetric = (v: number, metric: HeatMetric): string => (metric === "dt" ? 
 
 function TourSchedule({
   items,
+  allItems,
   today,
   active,
   school,
   onSchool,
 }: {
   items: TourItem[];
+  /** Toàn bộ lượt trong file (không áp bộ lọc liên kết / quá hạn) — dùng cho "Tìm khung giờ nhận đoàn mới". */
+  allItems: TourItem[];
   today: string;
   active: boolean;
   school: { key: string; name: string } | null;
@@ -1718,6 +1722,8 @@ function TourSchedule({
           </div>
         </Panel>
       </div>
+
+      <SlotFinder items={allItems} today={today} onPickDay={(d) => selectWeek(mondayOf(d), d)} />
 
       <section className="rounded-xl border border-border bg-card p-4 shadow-xs">
         <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
