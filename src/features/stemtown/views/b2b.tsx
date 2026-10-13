@@ -59,6 +59,7 @@ import {
   type Filters,
 } from "@/features/stemtown/lib/dashboard-data";
 import { formatCurrency, formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
+import { schoolConName } from "@/features/stemtown/lib/khach-hang-tour";
 import { cellFill, matchSel, useCrossFilter } from "@/features/stemtown/lib/cross-filter";
 import { CompareRow, CompareToggle } from "@/features/stemtown/components/compare-toggle";
 import {
@@ -95,6 +96,14 @@ const BRANCH_COLORS = [
   "oklch(0.75 0.14 60)", // vàng đất
 ];
 
+const EXPLOIT_BUCKETS = [
+  { key: "none", label: "Chưa có HS hợp đồng", test: (p: number | null) => p === null },
+  { key: "lt50", label: "Dưới 50%", test: (p: number | null) => p !== null && p < 0.5 },
+  { key: "50to99", label: "50% – 99%", test: (p: number | null) => p !== null && p >= 0.5 && p < 1 },
+  { key: "full", label: "Dùng hết / vượt (≥100%)", test: (p: number | null) => p !== null && p >= 1 },
+] as const;
+type ExploitKey = (typeof EXPLOIT_BUCKETS)[number]["key"];
+
 const CROSS_LABELS = {
   bucket: "Kỳ",
   branch: "Chi nhánh",
@@ -102,6 +111,7 @@ const CROSS_LABELS = {
   school: "Trường",
   band: "Đơn giá HS",
   customer: "Khách hàng",
+  schoolCon: "Khách hàng (SchoolIDCon)",
   entity: "Loại khách hàng",
 };
 
@@ -133,6 +143,8 @@ export function B2BPage() {
   const [dataVersion, setDataVersion] = useState(0);
   const [imported, setImported] = useState(false);
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [expBucket, setExpBucket] = useState<ExploitKey | "all">("all");
+  const [expAll, setExpAll] = useState(false);
 
   const applyRows = useCallback((raw: Record<string, unknown>[] | null) => {
     const rows = replaceB2BRows(raw);
@@ -159,6 +171,7 @@ export function B2BPage() {
         matchSel(r.branch, sel["branch"]) &&
         matchSel(segmentOf(r), sel["level"]) &&
         matchSel(customerKeyOf(r), sel["customer"]) &&
+        matchSel(schoolConName(r.schoolIdCon), sel["schoolCon"]) &&
         matchSel(entityOf(r), sel["entity"]) &&
         matchSel(bucketOf(r.date, filters.timeUnit), sel["bucket"]) &&
         matchSel(bandOf(r), sel["band"]),
@@ -262,6 +275,39 @@ export function B2BPage() {
         hopDong: hopDongByCustomer.get(d.name) ?? 0,
         nghiemThu: studentsByCustomer.get(d.name) ?? 0,
       }));
+
+    // "Khách hàng theo mức đã khai thác hợp đồng": gộp theo SchoolIDCon (tên theo SchoolIDCon),
+    // HS ký = cộng UNIQUE theo hợp đồng, HS đã khai thác = tổng HS thực tế các biên bản.
+    const expMap = new Map<string, { name: string; contracts: Map<string, number>; nt: number; bb: number; co: boolean }>();
+    rows.forEach((r, idx) => {
+      const id = r.schoolIdCon;
+      const e = expMap.get(id) ?? { name: schoolConName(id), contracts: new Map<string, number>(), nt: 0, bb: 0, co: false };
+      e.contracts.set(r.contract && r.contract !== "—" ? r.contract : `__no_contract_${idx}`, r.soHSHopDong);
+      e.nt += r.students;
+      e.bb += 1;
+      e.co = e.co || segmentOf(r) === "Công ty";
+      expMap.set(id, e);
+    });
+    const exploit = Array.from(expMap.entries())
+      .map(([id, e]) => {
+        const hd = Array.from(e.contracts.values()).reduce((a, v) => a + v, 0);
+        const pct = hd > 0 ? e.nt / hd : null;
+        return {
+          id,
+          name: e.name,
+          hd,
+          nt: e.nt,
+          contracts: e.contracts.size,
+          bb: e.bb,
+          pct,
+          used: Math.min(e.nt, hd),
+          remain: Math.max(hd - e.nt, 0),
+          over: hd > 0 ? Math.max(e.nt - hd, 0) : 0,
+          unk: hd > 0 ? 0 : e.nt,
+          bucket: EXPLOIT_BUCKETS.find((b) => b.test(pct))!.key,
+        };
+      })
+      .sort((a, b) => b.hd - a.hd || b.nt - a.nt);
 
     // "Số lượng Cty & Trường": đếm khách hàng duy nhất + tổng số HS trải nghiệm của mỗi nhóm
     let congTyCount = 0;
@@ -398,6 +444,7 @@ export function B2BPage() {
       bySegment,
       bySchool,
       byCustomer,
+      exploit,
       entitySummary,
       priceBands,
       heatmap,
@@ -1026,6 +1073,97 @@ export function B2BPage() {
           </ResponsiveContainer>
         </Panel>
       </div>
+
+      <Panel
+        title="Khách hàng theo mức đã khai thác hợp đồng"
+        subtitle="Gộp theo SchoolIDCon · HS đã khai thác = HS thực tế các biên bản nghiệm thu / HS ký trên hợp đồng (mỗi hợp đồng chỉ tính 1 lần) · bấm 1 thanh để lọc chéo"
+        code="CH-B2B-11"
+        isEmpty={data.exploit.length === 0}
+      >
+        {(() => {
+          const counts = new Map<string, number>();
+          data.exploit.forEach((d) => counts.set(d.bucket, (counts.get(d.bucket) ?? 0) + 1));
+          const list = data.exploit.filter((d) => expBucket === "all" || d.bucket === expBucket);
+          const shown = expAll ? list : list.slice(0, 15);
+          const tot = list.reduce((a, d) => ({ hd: a.hd + d.hd, nt: a.nt + d.nt }), { hd: 0, nt: 0 });
+          const selName = sel["schoolCon"];
+          return (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+                {([{ key: "all", label: "Tất cả" }, ...EXPLOIT_BUCKETS] as { key: ExploitKey | "all"; label: string }[]).map((b) => {
+                  const n = b.key === "all" ? data.exploit.length : (counts.get(b.key) ?? 0);
+                  const on = expBucket === b.key;
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => setExpBucket(b.key)}
+                      className={`rounded-full border px-2.5 py-1 transition-colors ${on ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted-foreground hover:bg-secondary"}`}
+                    >
+                      {b.label} · {formatNumber(n)}
+                    </button>
+                  );
+                })}
+                <span className="ml-auto text-muted-foreground">
+                  {formatNumber(list.length)} khách hàng · ký {formatNumber(tot.hd)} HS · đã khai thác {formatNumber(tot.nt)} HS
+                  {tot.hd > 0 ? ` (${formatNumber(Math.round((tot.nt / tot.hd) * 100))}%)` : ""}
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={Math.max(220, shown.length * 40 + 60)}>
+                <BarChart data={shown} layout="vertical" margin={{ top: 4, right: 72, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} horizontal={false} />
+                  <XAxis type="number" {...axisProps} tickFormatter={shortLabel} />
+                  <YAxis type="category" dataKey="name" {...axisProps} width={230} interval={0} />
+                  <Tooltip
+                    cursor={{ fill: "var(--secondary)" }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload as (typeof shown)[number];
+                      return (
+                        <TooltipBox label={String(label)}>
+                          <TooltipRow name="HS ký trên hợp đồng" value={d.hd} unit="học sinh" />
+                          <TooltipRow name="HS đã khai thác (nghiệm thu)" value={d.nt} unit="học sinh" />
+                          <TooltipRow name="Còn lại" value={d.hd - d.nt} unit="học sinh" />
+                          <TooltipRow name="Mức khai thác" value={d.pct === null ? 0 : Math.round(d.pct * 100)} unit="%" />
+                          <TooltipRow name="Số hợp đồng" value={d.contracts} unit="hợp đồng" />
+                          <TooltipRow name="Số biên bản" value={d.bb} unit="biên bản" />
+                          <p className="mt-1 text-[10px] text-muted-foreground">SchoolIDCon: {d.id}</p>
+                        </TooltipBox>
+                      );
+                    }}
+                  />
+                  <Legend verticalAlign="bottom" iconType="square" wrapperStyle={{ fontSize: 11 }} />
+                  {([
+                    ["used", "Đã khai thác", CHART_COLORS.primary],
+                    ["over", "Vượt hợp đồng", "var(--brand-accent, #E36511)"],
+                    ["remain", "Còn lại", "var(--brand-support, #88CBF1)"],
+                    ["unk", "Đã nghiệm thu (chưa có HS hợp đồng)", CHART_COLORS.axis],
+                  ] as const).map(([k, nm, c]) => (
+                    <Bar key={k} dataKey={k} name={nm} stackId="e" fill={c} cursor="pointer" onClick={(d: { name?: string }) => toggle("schoolCon", d?.name)}>
+                      {shown.map((d) => (
+                        <Cell key={d.id} fill={c} fillOpacity={selName && selName !== d.name ? 0.35 : 1} />
+                      ))}
+                      {k === "remain" && (
+                        <LabelList
+                          dataKey="pct"
+                          position="right"
+                          formatter={(v: number | null) => (v === null ? "" : `${formatNumber(Math.round(v * 100))}%`)}
+                          style={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                        />
+                      )}
+                    </Bar>
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+              {list.length > 15 && (
+                <button type="button" onClick={() => setExpAll((v) => !v)} className="mt-2 text-xs text-primary hover:underline">
+                  {expAll ? "Thu gọn" : `Xem thêm ${formatNumber(list.length - 15)} khách hàng`}
+                </button>
+              )}
+            </>
+          );
+        })()}
+      </Panel>
 
       <Panel
         title="Số lần hợp tác của từng khách hàng"

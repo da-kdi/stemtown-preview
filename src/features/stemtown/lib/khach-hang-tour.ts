@@ -88,3 +88,6 @@ export function customerOf(r: Src): Customer {
   memo.set(r, out);
   return out;
 }
+
+/** Tên khách hàng theo SchoolIDCon (dùng cho các chart ở tab Nghiệm thu). */
+export const schoolConName = (id: string): string => index().name.get(id) ?? id;
