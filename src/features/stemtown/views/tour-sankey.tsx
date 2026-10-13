@@ -6,6 +6,7 @@ import contractLookup from "@/features/stemtown/data/bienban-hopdong.json";
 import { COMPANY_COLOR, b2bRows } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber } from "@/features/stemtown/lib/format";
 import { isCompanyName } from "@/features/stemtown/lib/khach-hang";
+import { UNLINKED_CUSTOMER, customerOf } from "@/features/stemtown/lib/khach-hang-tour";
 import { reconcileStatus, type RecStatus, type TourItem } from "@/features/stemtown/lib/tour-rules";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ type LinkG = { key: string; a: Node; b: Node; v: number; flows: Flow[]; geo: Geo
 export type NodeSel = { keys: string[]; label: string };
 export type SankeySel = { cust?: NodeSel; unit?: NodeSel; rec?: RecStatus };
 
-const UNLINKED = "__unlinked";
+const UNLINKED = UNLINKED_CUSTOMER;
 const OTH_C = "__othC";
 const OTH_U = "__othU";
 const TOP_C = 5;
@@ -76,10 +77,9 @@ const statusCounts = (fl: Flow[]) => {
   return o;
 };
 
-export const custKeyOf = (r: TourItem): string => {
-  const c = (r.tenKhachHang ?? "").split(";")[0]?.trim() ?? "";
-  return c ? keyOf(c) : UNLINKED;
-};
+/** Khách hàng = SchoolIDCon (nối qua BienBanID / SoHopDong), không phải tên trường trong lịch tour. */
+export const custKeyOf = (r: TourItem): string => customerOf(r).id;
+export const custNameOf = (r: TourItem): string => customerOf(r).name;
 export const unitKeyOf = (r: TourItem): string => keyOf(r.schoolName);
 
 const rpath = (g: Geo, f = 1) => {
@@ -141,13 +141,14 @@ export function TourSankey({
   const allPaths = useMemo<Path[]>(
     () =>
       rows.map((r) => {
-        const cust = (r.tenKhachHang ?? "").split(";")[0]?.trim() ?? "";
-        const linked = cust !== "";
+        const cu = customerOf(r);
+        const cust = cu.name;
+        const linked = cu.id !== UNLINKED;
         const ids = (r.bienBanId ?? "").split(";").map((x) => x.trim()).filter(Boolean);
         const cons = (r.soHopDong ?? "").split(";").map((x) => x.trim()).filter(Boolean);
         return {
           cid: custKeyOf(r),
-          cname: linked ? clean(cust) : "Chưa gắn biên bản",
+          cname: cust,
           isCo: linked && isCompanyName(cust),
           uid: unitKeyOf(r),
           uname: clean(r.schoolName),
@@ -227,7 +228,7 @@ export function TourSankey({
       .map((x) => mk(x.id, "c", x.ps[0]!.cname, fC.get(x.id)!, 0, x.ps[0]!.isCo ? COMPANY_COLOR : CHART_COLORS.primary));
     const restC = cRank.filter((x) => !cKeep.has(x.id));
     if (restC.length) cs.push(mk(OTH_C, "c", `${restC.length} khách hàng khác`, fC.get(OTH_C)!, 0, CHART_COLORS.axis, restC.map((r) => ({ id: r.id, name: r.ps[0]!.cname, v: r.v, n: r.ps.length }))));
-    if (fC.has(UNLINKED)) cs.push(mk(UNLINKED, "c", "Chưa gắn biên bản", fC.get(UNLINKED)!, 0, CHART_COLORS.axis));
+    if (fC.has(UNLINKED)) cs.push(mk(UNLINKED, "c", "Chưa xác định khách hàng", fC.get(UNLINKED)!, 0, CHART_COLORS.axis));
 
     const us: Node[] = uRank.filter((x) => uKeep.has(x.id)).map((x) => mk(x.id, "u", x.ps[0]!.uname, fU.get(x.id)!, 1, CHART_COLORS.dark));
     const restU = uRank.filter((x) => !uKeep.has(x.id));
@@ -401,7 +402,7 @@ export function TourSankey({
   return (
     <Panel
       title="Luồng nghiệm thu: Khách hàng → Đơn vị sử dụng → Trạng thái"
-      subtitle={`Bấm khách hàng hoặc trường để lần theo quan hệ · ${formatNumber(linkedCount)}/${formatNumber(allPaths.length)} tour đã gắn biên bản`}
+      subtitle={`Bấm khách hàng hoặc trường để lần theo quan hệ · ${formatNumber(linkedCount)}/${formatNumber(allPaths.length)} tour đã xác định khách hàng`}
       code="CH-TOUR-O7"
       isEmpty={!model}
     >
@@ -439,7 +440,7 @@ export function TourSankey({
         </div>
         <label className={cn("inline-flex items-center gap-1.5 text-xs", custFilter === "all" ? "text-muted-foreground" : "text-muted-foreground/50")}>
           <input type="checkbox" checked={withUnlinked && custFilter === "all"} disabled={custFilter !== "all"} onChange={(e) => setWithUnlinked(e.target.checked)} />
-          Gồm tour chưa gắn biên bản
+          Gồm tour chưa xác định khách hàng
         </label>
         {model && (model.restC > 0 || model.restU > 0 || showAll) && (
           <button type="button" onClick={() => setShowAll((v) => !v)} className="ml-auto rounded-md border border-border px-2.5 py-1 text-xs hover:bg-secondary">
@@ -607,7 +608,7 @@ export function TourSankey({
           <i className="size-2.5" style={{ background: CHART_COLORS.primary }} /> Trường trực tiếp
         </span>
         <span className="inline-flex items-center gap-1">
-          <i className="size-2.5" style={{ background: CHART_COLORS.axis }} /> Chưa gắn / nhóm khác
+          <i className="size-2.5" style={{ background: CHART_COLORS.axis }} /> Chưa xác định / nhóm khác
         </span>
         <span>Độ dày dải theo {METRIC_LABEL[metric].toLowerCase()}. Loại khách hàng: tên chứa công ty / cty / TNHH / cổ phần / tập đoàn / JSC là Công ty (có thể ghi đè trong khachhang-loai.json), còn lại là Trường trực tiếp.</span>
       </div>

@@ -19,7 +19,7 @@ import { CHART_COLORS, TooltipBox, TooltipRow, YCategoryTick, axisProps } from "
 import { FactTable, type Column } from "@/features/stemtown/components/fact-table";
 import { ImportDataBar } from "@/features/stemtown/components/import-data";
 import { KpiCard, type SubMetric } from "@/features/stemtown/components/kpi";
-import { TourSankey, custKeyOf, unitKeyOf, type NodeSel } from "@/features/stemtown/views/tour-sankey";
+import { TourSankey, custKeyOf, custNameOf, unitKeyOf, type NodeSel } from "@/features/stemtown/views/tour-sankey";
 import { EMPTY_TEXT, Panel, SectionHeader } from "@/features/stemtown/components/panel";
 import { bucketLabel, bucketOf, replaceTourRows, sortBuckets, targetFor, targetForBucket, tourRows, type TimeUnit } from "@/features/stemtown/lib/dashboard-data";
 import { formatNumber, formatPercent, formatShort } from "@/features/stemtown/lib/format";
@@ -319,7 +319,7 @@ const DETAIL_COLS: Column<TourItem>[] = [
   { key: "date", header: "Ngày tour", render: (r) => dmy(r.date) },
   { key: "time", header: "Khung giờ", render: (r) => r.timeRaw ?? "—" },
   { key: "school", header: "Tên trường / đơn vị", render: (r) => r.schoolName, noTruncate: true },
-  { key: "cust", header: "Khách hàng nghiệm thu", render: (r) => r.tenKhachHang ?? "—", noTruncate: true },
+  { key: "cust", header: "Khách hàng nghiệm thu", render: (r) => (custKeyOf(r) === "__unlinked" ? "—" : custNameOf(r)), noTruncate: true },
   { key: "grade", header: "Khối lớp", render: (r) => r.grade ?? "—" },
   { key: "sale", header: "Sale", render: (r) => r.sale ?? "—" },
   { key: "hs", header: "SL HS", render: (r) => formatNumber(r.students), align: "right" },
