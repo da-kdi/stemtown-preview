@@ -274,20 +274,6 @@ function TourRangeFilter({
 const OC = { dt: CHART_COLORS.primary, tour: CHART_COLORS.dark, hs: CHART_COLORS.support } as const;
 const SALE_NONE = "(Chưa có sale)";
 
-/** Cấp học suy từ tên trường — cùng cách chia với phần Nghiệm thu (segmentOf/schoolLevel). */
-function levelOfTour(r: TourItem): string {
-  const lower = r.schoolName.toLowerCase();
-  const up = r.schoolName.toUpperCase();
-  if (lower.includes("công ty")) return "Công ty";
-  if (lower.includes("cao đẳng") || lower.includes("đại học")) return "Khác";
-  if (lower.includes("th-thcs-thpt") || lower.includes("thcs-thpt") || lower.includes("liên cấp")) return "Liên cấp";
-  if (up.startsWith("MN") || up.includes("MẦM NON") || up.includes("MẪU GIÁO")) return "Mầm non/Mẫu giáo";
-  if (up.startsWith("TH ") || up.includes("TIỂU HỌC")) return "Tiểu học";
-  if (up.includes("THCS") || up.includes("TRUNG HỌC CƠ SỞ")) return "THCS";
-  if (up.includes("THPT")) return "THPT";
-  return "Khác";
-}
-
 type Grp = { name: string; n: number; hs: number; dt: number };
 type Tot = { n: number; hs: number; dt: number };
 function groupTours(rs: TourItem[], keyFn: (r: TourItem) => string | null): Grp[] {
@@ -319,10 +305,9 @@ function GroupTooltip({ g, tot, label }: { g: { n: number; hs: number; dt: numbe
   );
 }
 
-type DimMetric = "sale" | "level";
+type DimMetric = "sale";
 const DIM_CFG: Record<DimMetric, { label: string; keyFn: (r: TourItem) => string | null; top?: number; order?: string[] }> = {
   sale: { label: "Sales", keyFn: (r) => r.sale ?? SALE_NONE, top: 10 },
-  level: { label: "Cấp học", keyFn: levelOfTour },
 };
 type TimeMetric = "dt" | "n" | "hs";
 const TIME_CFG: Record<TimeMetric, { label: string; color: string; fmt: (v: number) => string }> = {
@@ -331,7 +316,6 @@ const TIME_CFG: Record<TimeMetric, { label: string; color: string; fmt: (v: numb
   hs: { label: "Tổng số học sinh dự kiến", color: OC.hs, fmt: (v) => `${formatNumber(v)} HS` },
 };
 const REC_ORDER: RecStatus[] = ["Chưa đi", "Chưa nghiệm thu", "Đã nghiệm thu"];
-const REC_COLOR: Record<RecStatus, string> = { "Chưa đi": CHART_COLORS.axis, "Chưa nghiệm thu": WARN, "Đã nghiệm thu": "#2e9e5b" };
 
 type OvSel = { month?: string; weekday?: number; dimKey?: DimMetric; dimVal?: string; rec?: RecStatus; timeBucket?: string; cust?: NodeSel; unit?: NodeSel };
 const CHART_H = 250;
@@ -452,23 +436,6 @@ function TourOverview({ items, today, onDrill, beforeDetail }: { items: TourItem
     });
     return out;
   }, [dimRows]);
-
-  /** HS dự kiến vs thực tế — dùng chung Đơn vị thời gian của cả tab; bấm cột lọc chéo theo đúng bucket. */
-  const planAct = useMemo(() => {
-    const rs = rowsExcept("timeBucket");
-    return timeBuckets.map((b) => {
-      const l = rs.filter((r) => r.date && bucketOf(r.date, timeUnit) === b);
-      const w = l.filter((r) => r.actualStudents !== null);
-      return {
-        m: b,
-        label: bucketLabel(b, timeUnit),
-        n: l.length,
-        k: w.length,
-        plan: l.length ? l.reduce((a, r) => a + r.students, 0) : null,
-        act: w.length ? w.reduce((a, r) => a + (r.actualStudents ?? 0), 0) : null,
-      };
-    });
-  }, [rowsExcept, timeBuckets, timeUnit]);
 
   /** Heatmap Số tour theo Tháng (hàng) × Thứ (cột). */
   const heat = useMemo(() => {
@@ -679,7 +646,7 @@ function TourOverview({ items, today, onDrill, beforeDetail }: { items: TourItem
         />
       </div>
 
-      {/* Hàng 1: Xu hướng theo thời gian (toggle 3 chỉ số) + Đối chiếu tiến độ/nghiệm thu */}
+      {/* Hàng 1: Xu hướng theo thời gian (toggle 3 chỉ số) + Số tour theo Sales (trạng thái nghiệm thu xem ở cột cuối Sankey) */}
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title={`${TIME_CFG[timeMetric].label} theo thời gian`} code="CH-TOUR-O1" isEmpty={timeData.every((r) => r[timeMetric] === 0)}>
           <div className="mb-2 inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1">
@@ -740,57 +707,6 @@ function TourOverview({ items, today, onDrill, beforeDetail }: { items: TourItem
           </ResponsiveContainer>
         </Panel>
 
-        <Panel
-          title="Đối chiếu Tiến độ & Nghiệm thu"
-          subtitle="Tiến độ chỉ còn Done/Chưa đi. Trong Done, tách theo đã khớp được BienBanID (Đã nghiệm thu) hay chưa."
-          code="CH-TOUR-O2"
-          isEmpty={tot.n === 0}
-        >
-          <div className="flex h-5 overflow-hidden rounded-none">
-            {REC_ORDER.map((s) => {
-              const v = recCounts[s];
-              if (!v) return null;
-              const pct = tot.n ? (v / tot.n) * 100 : 0;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  title={`${s}: ${formatNumber(v)} tour (${formatNumber(Math.round(pct))}%)`}
-                  onClick={() => toggle("rec", s)}
-                  style={{ width: `${pct}%`, background: REC_COLOR[s], opacity: sel.rec && sel.rec !== s ? 0.35 : 1 }}
-                />
-              );
-            })}
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-            {REC_ORDER.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => toggle("rec", s)}
-                className={cn("rounded-lg border p-2 transition-colors", sel.rec === s ? "border-primary bg-primary/10" : "border-border hover:bg-secondary")}
-              >
-                <span className="mx-auto mb-1 block size-2 rounded-full" style={{ background: REC_COLOR[s] }} />
-                <b className="block text-base tabular-nums">{formatNumber(recCounts[s])}</b>
-                <span className="text-muted-foreground">{s}</span>
-              </button>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {doneTotal > 0 ? (
-              <>
-                Tỷ lệ nghiệm thu / tour đã Done:{" "}
-                <b className={recCounts["Chưa nghiệm thu"] > 0 ? "text-[var(--brand-accent)]" : undefined}>{formatNumber(Math.round((recCounts["Đã nghiệm thu"] / doneTotal) * 100))}%</b> ({formatNumber(recCounts["Đã nghiệm thu"])}/{formatNumber(doneTotal)} tour)
-              </>
-            ) : (
-              "Chưa có tour nào Done trong khoảng đang lọc."
-            )}
-          </p>
-        </Panel>
-      </div>
-
-      {/* Hàng 2: Cơ cấu số tour (Sales, Cấp học) + HS dự kiến vs thực tế */}
-      <div className="grid gap-4 xl:grid-cols-3">
         {(Object.keys(DIM_CFG) as DimMetric[]).map((k) => {
           const data = dimDataByKey[k];
           const tot2 = dimTotByKey[k];
@@ -820,44 +736,6 @@ function TourOverview({ items, today, onDrill, beforeDetail }: { items: TourItem
             </Panel>
           );
         })}
-        <Panel title="HS dự kiến và HS thực tế theo thời gian" subtitle="Kỳ chưa có SL TT chỉ hiện cột dự kiến." code="CH-TOUR-O4" isEmpty={planAct.every((r) => r.plan === null)}>
-          <ResponsiveContainer width="100%" height={CHART_H}>
-            <BarChart data={planAct} margin={{ top: 16, right: 8, left: -6, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-              <XAxis dataKey="label" {...axisProps} />
-              <YAxis {...axisProps} tickFormatter={(v: number) => formatNumber(v)} width={40} />
-              <Tooltip
-                cursor={{ fill: "var(--secondary)" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const r = payload[0]?.payload as (typeof planAct)[number];
-                  const planSum = planAct.reduce((a, x) => a + (x.plan ?? 0), 0);
-                  return (
-                    <TooltipBox label={r.label}>
-                      <TooltipRow color={OC.hs} name="HS dự kiến" value={r.plan ?? 0} unit="HS" share={planSum ? ((r.plan ?? 0) / planSum) * 100 : undefined} />
-                      {r.k ? (
-                        <TooltipRow color={OC.tour} name="HS thực tế (SL TT)" value={r.act ?? 0} unit="HS" share={r.plan ? ((r.act ?? 0) / r.plan) * 100 : undefined} />
-                      ) : (
-                        <p className="text-muted-foreground">Chưa có SL TT</p>
-                      )}
-                      <p className="mt-1 border-t border-dashed border-border pt-1 text-muted-foreground">
-                        Tổng dự kiến các kỳ: {formatNumber(planSum)} HS{r.k ? `, ${r.k}/${r.n} tour có SL TT` : ""}
-                      </p>
-                    </TooltipBox>
-                  );
-                }}
-              />
-              <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="plan" name="HS dự kiến" fill={OC.hs} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("timeBucket", d?.m)}>
-                <LabelList dataKey="plan" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
-              </Bar>
-              <Bar dataKey="act" name="HS thực tế (SL TT)" fill={OC.tour} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: { m?: string }) => toggle("timeBucket", d?.m)}>
-                <LabelList dataKey="act" position="top" formatter={(v: number | null) => (v === null ? "" : formatNumber(v))} style={{ fontSize: 9, fill: CHART_COLORS.axis }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
-
       </div>
 
       {/* Hàng 3: Mạng lưới khách hàng (Sankey) + Heatmap Tháng × Thứ */}
